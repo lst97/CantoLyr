@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EntryType {
+  vocab
+  char
+}
+
+model Entry {
+  id        BigInt      @id @default(autoincrement())
+  surface   String      // The actual character/word text
+  type      EntryType
+  lang      String      // Language code (zh-HK, misc, etc.)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  readings  Reading[]
+
+  // Indexes for optimal query performance
+  @@index([type, surface])
+  @@index([lang, type])
+  @@map("entries")
+}
+
+model Reading {
+  id           BigInt     @id @default(autoincrement())
+  entryId      BigInt
+  entry        Entry      @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  jyutping     String
+  toneOriginal String     // Extracted from jyutping (e.g., "341" from "zaai3 kyun4 jan4")
+  toneMapped   String     // Mapped using tone conversion (e.g., "403")
+  syllables    Int        // Number of syllables
+  freq         Float      // Frequency score
+  pos          String     // Part of speech (NOUN, ADJ, NUM, LETTER, etc.)
+  register     String     // Register (formal, neutral, colloquial)
+  gloss        String     // English gloss/definition
+  source       String     // Data source (lexicon_v1, charfreq_v1, etc.)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  feedback     Feedback[] // Relation to feedback records
+
+  // Indexes for optimal query performance on tone-based searches
+  @@index([toneMapped])
+  @@index([toneMapped, syllables])
+  @@index([syllables])
+  @@index([freq])
+  @@map("readings")
+}
+
+model Feedback {
+  id        BigInt   @id @default(autoincrement())
+  readingId BigInt
+  reading   Reading  @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  accepted  Boolean  // Whether the user accepted or rejected this reading
+  sessionId String?  // Optional session ID to group related selections
+  context   Json?    // Optional context about the selection
+  createdAt DateTime @default(now())
+
+  // Indexes for analytics and querying
+  @@index([readingId])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("feedback")
+}

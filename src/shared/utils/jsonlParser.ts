@@ -1,0 +1,305 @@
+/**
+ * JSONL parser for streaming large files and normalizing entries
+ */
+
+import { createReadStream } from 'fs';
+import { createInterface } from 'readline';
+import { z } from 'zod';
+import { ToneMap } from '../../domain/value-objects/ToneMap.js';
+import { extractTones, countSyllables, normalizeJyutping, isValidJyutping } from './jyutping.js';
+import type { 
+  RawEntry, 
+  RawReading, 
+  NormalizedEntry, 
+  NormalizedReading, 
+  ParseResult, 
+  ParseStats 
+} from '../types/data.js';
+import type { PartOfSpeech, Register } from '../types/common.js';
+
+/**
+ * Zod schema for validating raw JSONL entries
+ */
+const RawReadingSchema = z.object({
+  jyutping: z.string().min(1),
+  freq: z.number(),
+  pos: z.string(),
+  register: z.string(),
+  gloss: z.string(),
+  source: z.string()
+});
+
+const RawEntrySchema = z.object({
+  surface: z.string().min(1),
+  type: z.enum(['vocab', 'char']),
+  lang: z.string().min(1),
+  readings: z.array(RawReadingSchema).min(1)
+});
+
+/**
+ * JSONL parser class for streaming and normalizing entries
+ */
+export class JsonlParser {
+  /**
+   * Parse a JSONL file and yield normalized entries
+   * 
+   * @param filePath - Path to the JSONL file
+   * @yields ParseResult for each line
+   */
+  async* parseFile(filePath: string): AsyncGenerator<ParseResult> {
+    const fileStream = createReadStream(filePath, { encoding: 'utf8' });
+    const rl = createInterface({
+      input: fileStream,
+      crlfDelay: Infinity
+    });
+
+    let lineNumber = 0;
+
+    for await (const line of rl) {
+      lineNumber++;
+      
+      // Skip empty lines
+      if (line.trim() === '') {
+        continue;
+      }
+
+      yield this.parseLine(line, lineNumber);
+    }
+  }
+
+  /**
+   * Parse a single JSONL line
+   * 
+   * @param line - Raw JSONL line
+   * @param lineNumber - Line number for error reporting
+   * @returns ParseResult
+   */
+  parseLine(line: string, lineNumber: number): ParseResult {
+    try {
+      // Parse JSON
+      const rawData = JSON.parse(line);
+      
+      // Validate schema
+      const rawEntry = this.validateEntry(rawData);
+      
+      // Normalize entry
+      const normalizedEntry = this.normalizeEntry(rawEntry);
+      
+      return {
+        success: true,
+        entry: normalizedEntry,
+        lineNumber
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        lineNumber
+      };
+    }
+  }
+
+  /**
+   * Validate a raw entry against the expected schema
+   * 
+   * @param entry - Raw entry data
+   * @returns Validated RawEntry
+   * @throws Error if validation fails
+   */
+  validateEntry(entry: unknown): RawEntry {
+    const result = RawEntrySchema.safeParse(entry);
+    
+    if (!result.success) {
+      const errors = result.error.issues.map((err: any) => 
+        `${err.path.join('.')}: ${err.message}`
+      ).join(', ');
+      throw new Error(`Schema validation failed: ${errors}`);
+    }
+    
+    return result.data;
+  }
+
+  /**
+   * Normalize a raw entry for database insertion
+   * 
+   * @param rawEntry - Raw entry from JSONL
+   * @returns Normalized entry
+   * @throws Error if normalization fails
+   */
+  normalizeEntry(rawEntry: RawEntry): NormalizedEntry {
+    const normalizedReadings: NormalizedReading[] = [];
+    
+    for (const rawReading of rawEntry.readings) {
+      try {
+        const normalizedReading = this.normalizeReading(rawReading);
+        normalizedReadings.push(normalizedReading);
+      } catch (error) {
+        throw new Error(`Failed to normalize reading "${rawReading.jyutping}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    if (normalizedReadings.length === 0) {
+      throw new Error('No valid readings found after normalization');
+    }
+    
+    return {
+      surface: rawEntry.surface.trim(),
+      type: rawEntry.type,
+      lang: rawEntry.lang.trim(),
+      readings: normalizedReadings
+    };
+  }
+
+  /**
+   * Normalize a raw reading
+   * 
+   * @param rawReading - Raw reading from JSONL
+   * @returns Normalized reading
+   * @throws Error if normalization fails
+   */
+  private normalizeReading(rawReading: RawReading): NormalizedReading {
+    // Normalize jyutping
+    const jyutping = normalizeJyutping(rawReading.jyutping);
+    
+    // Validate jyutping
+    if (!isValidJyutping(jyutping)) {
+      throw new Error(`Invalid jyutping: "${jyutping}"`);
+    }
+    
+    // Extract original tones
+    const toneOriginal = extractTones(jyutping);
+    
+    // Map tones
+    const toneMap = ToneMap.mapTones(toneOriginal);
+    const toneMapped = toneMap.value;
+    
+    // Count syllables
+    const syllables = countSyllables(jyutping);
+    
+    // Normalize part of speech
+    const pos = this.normalizePartOfSpeech(rawReading.pos);
+    
+    // Normalize register
+    const register = this.normalizeRegister(rawReading.register);
+    
+    return {
+      jyutping,
+      toneOriginal,
+      toneMapped,
+      syllables,
+      freq: rawReading.freq,
+      pos,
+      register,
+      gloss: rawReading.gloss.trim(),
+      source: rawReading.source.trim()
+    };
+  }
+
+  /**
+   * Normalize part of speech to known values
+   * 
+   * @param pos - Raw part of speech string
+   * @returns Normalized PartOfSpeech
+   */
+  private normalizePartOfSpeech(pos: string): PartOfSpeech {
+    const normalized = pos.toUpperCase().trim();
+    
+    const validPOS: PartOfSpeech[] = [
+      'NOUN', 'ADJ', 'NUM', 'LETTER', 'VERB', 'ADV', 
+      'PREP', 'CONJ', 'INTJ', 'PRON', 'DET', 'PART'
+    ];
+    
+    if (validPOS.includes(normalized as PartOfSpeech)) {
+      return normalized as PartOfSpeech;
+    }
+    
+    // Map common variations
+    const posMapping: Record<string, PartOfSpeech> = {
+      'N': 'NOUN',
+      'NOUN': 'NOUN',
+      'ADJ': 'ADJ',
+      'ADJECTIVE': 'ADJ',
+      'V': 'VERB',
+      'VERB': 'VERB',
+      'ADV': 'ADV',
+      'ADVERB': 'ADV',
+      'NUM': 'NUM',
+      'NUMBER': 'NUM',
+      'NUMERAL': 'NUM',
+      'PREP': 'PREP',
+      'PREPOSITION': 'PREP',
+      'CONJ': 'CONJ',
+      'CONJUNCTION': 'CONJ',
+      'INTJ': 'INTJ',
+      'INTERJECTION': 'INTJ',
+      'PRON': 'PRON',
+      'PRONOUN': 'PRON',
+      'DET': 'DET',
+      'DETERMINER': 'DET',
+      'PART': 'PART',
+      'PARTICLE': 'PART',
+      'LETTER': 'LETTER'
+    };
+    
+    return posMapping[normalized] || 'UNKNOWN';
+  }
+
+  /**
+   * Normalize register to known values
+   * 
+   * @param register - Raw register string
+   * @returns Normalized Register
+   */
+  private normalizeRegister(register: string): Register {
+    const normalized = register.toLowerCase().trim();
+    
+    const registerMapping: Record<string, Register> = {
+      'formal': 'formal',
+      'neutral': 'neutral',
+      'colloquial': 'colloquial',
+      'standard': 'neutral',
+      'informal': 'colloquial',
+      'casual': 'colloquial'
+    };
+    
+    return registerMapping[normalized] || 'neutral';
+  }
+
+  /**
+   * Parse a JSONL file and collect statistics
+   * 
+   * @param filePath - Path to the JSONL file
+   * @returns Parse statistics
+   */
+  async parseFileWithStats(filePath: string): Promise<ParseStats> {
+    const stats: ParseStats = {
+      totalLines: 0,
+      successfulEntries: 0,
+      failedEntries: 0,
+      errors: []
+    };
+
+    for await (const result of this.parseFile(filePath)) {
+      stats.totalLines++;
+      
+      if (result.success) {
+        stats.successfulEntries++;
+      } else {
+        stats.failedEntries++;
+        stats.errors.push({
+          lineNumber: result.lineNumber,
+          error: result.error || 'Unknown error'
+        });
+      }
+    }
+
+    return stats;
+  }
+}
+
+/**
+ * Convenience function to create a new JSONL parser
+ */
+export function createJsonlParser(): JsonlParser {
+  return new JsonlParser();
+}
