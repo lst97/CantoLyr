@@ -1,76 +1,88 @@
-// TODO: need to imporve the prefilter
-
 import type {
-  LlmReranker,
-  RerankInput,
-  RerankResult,
+  LlmGroupedSelector,
+  GroupedSelectionInput,
+  GroupedSelectionResult,
   LlmConfig,
-  RankingItem,
-} from "../../../application/ports/LlmReranker.js";
-import { GoogleGenAI } from '@google/genai';
+  GroupSelection,
+} from "../../../application/ports/LlmGroupedSelector.js";
+import { GoogleGenAI } from "@google/genai";
 import Ajv, { ValidateFunction } from "ajv";
-
-
+import { buildMvpGroupedSelectionPrompt } from "./prompts/mvpGroupedSelectionPrompt.js";
 
 /**
- * Expected JSON structure from Gemini for rankings
+ * Expected JSON structure from Gemini for grouped selection
  */
-const rankingResponseSchema = {
+const groupedSelectionResponseSchema = {
   type: "object",
   properties: {
-    rankings: {
+    selections: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          readingId: { type: "string" },
-          score: { type: "number" }, // Allow any number, we'll clamp it later
-          reason: { type: "string" },
+          group: { type: "number" },
+          option: { type: "number" },
         },
-        required: ["readingId", "score"],
+        required: ["group", "option"],
       },
     },
+    line: { type: "string" },
+    reason: { type: "string" },
   },
-  required: ["rankings"],
+  required: ["selections", "line"],
 };
 
 /**
- * Google Gemini API implementation of LlmReranker using the official Google Gen AI SDK
- * Provides intelligent reranking of Cantonese readings based on context and constraints
+ * Google Gemini API implementation of LlmGroupedSelector using the official Google Gen AI SDK
+ * Provides intelligent grouped selection of Cantonese words based on creative context
  */
-export class GeminiLlmReranker implements LlmReranker {
+export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
   private readonly ajv: Ajv;
-  private readonly validateRankingResponse: ValidateFunction;
+  private readonly validateGroupedSelectionResponse: ValidateFunction;
   private readonly genAI: GoogleGenAI;
 
   constructor(private readonly config: LlmConfig) {
     this.ajv = new Ajv();
-    this.validateRankingResponse = this.ajv.compile(rankingResponseSchema);
+    this.validateGroupedSelectionResponse = this.ajv.compile(
+      groupedSelectionResponseSchema
+    );
     this.genAI = new GoogleGenAI({ apiKey: config.apiKey! });
   }
 
-  async rerank(input: RerankInput): Promise<RerankResult> {
+  async selectFromGroups(
+    input: GroupedSelectionInput
+  ): Promise<GroupedSelectionResult> {
     const startTime = Date.now();
 
     try {
       await this.validateConfig();
 
-      const prompt = this.buildPrompt(input);
-      const response = await this.generateContent(prompt) as any;
+      const promptOptions = Object.fromEntries(
+        Object.entries({
+          theme: input.theme,
+          mood: input.mood,
+          genre: input.genre,
+          language: input.language,
+        }).filter(([_, value]) => value !== undefined)
+      );
+
+      const prompt = buildMvpGroupedSelectionPrompt(
+        input.groups,
+        promptOptions
+      );
+
+      const response = (await this.generateContent(prompt)) as any;
 
       const text = this.extractText(response);
       if (!text) {
         throw new Error("No text content in Gemini response");
       }
 
-      const rankings = this.parseRankings(
-        text,
-        input.candidates.map((c) => c.id)
-      );
+      const result = this.parseGroupedSelection(text, input.groups);
       const processingTimeMs = Date.now() - startTime;
 
       return {
-        rankings,
+        ...result,
         success: true,
         model: this.config.model || "gemini-2.5-flash",
         processingTimeMs,
@@ -81,7 +93,8 @@ export class GeminiLlmReranker implements LlmReranker {
         error instanceof Error ? error.message : "Unknown error";
 
       return {
-        rankings: [],
+        selections: [],
+        line: "",
         success: false,
         error: errorMessage,
         model: this.config.model || "gemini-2.5-flash",
@@ -121,53 +134,9 @@ export class GeminiLlmReranker implements LlmReranker {
     }
   }
 
-  private buildPrompt(input: RerankInput): string {
-    const candidatesText = input.candidates
-      .map(
-        (c, idx) =>
-          `${idx + 1}. ID: ${c.id}, Surface: "${c.surface}", Jyutping: "${
-            c.jyutping
-          }", Gloss: "${c.gloss}", POS: ${c.pos}, Register: ${c.register}`
-      )
-      .join("\n");
-
-    const constraintsText = input.constraints
-      ? `\nConstraints: ${JSON.stringify(input.constraints)}`
-      : "";
-
-    const contextText = input.context
-      ? `\nContext: ${JSON.stringify(input.context)}`
-      : "";
-
-    return `You are helping compose Cantonese lyrics. Please rank the following Cantonese characters/words for the tone pattern "${input.tonePattern}".
-
-Consider:
-1. Semantic appropriateness for lyrical composition
-2. Register and formality level
-3. Frequency and common usage
-4. Poetic and artistic value
-5. Contextual relevance${constraintsText}${contextText}
-
-Candidates:
-${candidatesText}
-
-Please respond with a JSON object containing a "rankings" array. Each item should have:
-- readingId: the ID as a string
-- score: a number between 0.0 and 1.0 (1.0 being best)
-- reason: optional brief explanation
-
-Example format:
-{
-  "rankings": [
-    {"readingId": "123", "score": 0.9, "reason": "Perfect for romantic lyrics"},
-    {"readingId": "456", "score": 0.7, "reason": "Good semantic fit"}
-  ]
-}`;
-  }
-
   private async generateContent(prompt: string) {
     const model = this.config.model || "gemini-2.5-flash";
-    
+
     // Create a timeout promise if timeout is configured
     const timeoutMs = this.config.timeoutMs || 600000;
     const timeoutPromise = new Promise((_, reject) => {
@@ -188,7 +157,7 @@ Example format:
         responseModalities: ['TEXT'],
         // Ask SDK to treat output as JSON and help enforce structure
         responseMimeType: 'application/json',
-        responseJsonSchema: rankingResponseSchema,
+        responseJsonSchema: groupedSelectionResponseSchema,
       },
     });
 
@@ -201,6 +170,7 @@ Example format:
    * Supports both mocked `.text` property and real SDK `.response.text()` forms.
    */
   private extractText(response: any): string | undefined {
+    console.log("Gemini response:", response);
     try {
       if (!response) return undefined;
       // Unit test mock shape: { text: string }
@@ -275,10 +245,10 @@ Example format:
     }
   }
 
-  private parseRankings(
+  private parseGroupedSelection(
     textContent: string,
-    validIds: bigint[]
-  ): RankingItem[] {
+    groups: any[]
+  ): { selections: GroupSelection[]; line: string; reason?: string } {
     try {
       // Try to extract JSON from the response
       const jsonMatch = textContent.match(/\{[\s\S]*\}/);
@@ -286,28 +256,74 @@ Example format:
         throw new Error("No JSON found in Gemini response");
       }
 
-      const parsed: any = JSON.parse(jsonMatch[0]);
+      const parsed: unknown = JSON.parse(jsonMatch[0]);
 
-      if (!this.validateRankingResponse(parsed)) {
+      if (!this.validateGroupedSelectionResponse(parsed)) {
         throw new Error(
-          `Invalid ranking response format: ${this.ajv.errorsText(
-            this.validateRankingResponse.errors
+          `Invalid grouped selection response format: ${this.ajv.errorsText(
+            this.validateGroupedSelectionResponse.errors
           )}`
         );
       }
 
-      const validIdStrings = new Set(validIds.map((id) => id.toString()));
+      // Type assertion is safe here because we've validated the structure above
+      const validatedParsed = parsed as {
+        selections: Array<{ group: number; option: number }>;
+        line: string;
+        reason?: string;
+      };
 
-      return (parsed as any).rankings
-        .filter((item: any) => validIdStrings.has(item.readingId))
-        .map((item: any) => ({
-          readingId: BigInt(item.readingId),
-          score: Math.max(0, Math.min(1, item.score)), // Clamp to [0, 1]
-          reason: item.reason,
-        }));
+      // Validate selections against available groups and options
+      const validatedSelections: GroupSelection[] = [];
+
+      for (const selection of validatedParsed.selections) {
+        const groupIndex = selection.group - 1; // Convert to 0-based
+        const optionIndex = selection.option - 1; // Convert to 0-based
+
+        if (groupIndex < 0 || groupIndex >= groups.length) {
+          throw new Error(`Invalid group number: ${selection.group}`);
+        }
+
+        const group = groups[groupIndex];
+        if (!group || optionIndex < 0 || optionIndex >= group.options.length) {
+          throw new Error(
+            `Invalid option number: ${selection.option} for group ${selection.group}`
+          );
+        }
+
+        const option = group.options[optionIndex];
+        validatedSelections.push({
+          group: selection.group,
+          option: selection.option,
+          surface: option.surface,
+          readingId: option.readingId,
+        });
+      }
+
+      // Verify we have selections for all groups
+      if (validatedSelections.length !== groups.length) {
+        throw new Error(
+          `Expected ${groups.length} selections, got ${validatedSelections.length}`
+        );
+      }
+
+      const result: {
+        selections: GroupSelection[];
+        line: string;
+        reason?: string;
+      } = {
+        selections: validatedSelections,
+        line: validatedParsed.line,
+      };
+
+      if (validatedParsed.reason) {
+        result.reason = validatedParsed.reason;
+      }
+
+      return result;
     } catch (error) {
       throw new Error(
-        `Failed to parse Gemini rankings: ${
+        `Failed to parse Gemini grouped selection: ${
           error instanceof Error ? error.message : "Unknown error"
         }`
       );

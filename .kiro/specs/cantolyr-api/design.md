@@ -76,17 +76,36 @@ class ToneMap {
 
 #### Domain Services
 ```typescript
-// RankCombiner: Combines heuristic and LLM scores
-combineScores(heuristic: number, llm?: number): number
-// Formula: (llm ?? 0) * 0.7 + heuristic * 0.3
+// GroupedSelectionService: Orchestrates prefiltering and LLM-based creative selection
+interface Group {
+  groupIndex: number
+  pattern: string
+  options: GroupedOption[]
+}
+
+interface GroupedOption {
+  option: number
+  surface: string
+  readingId: bigint
+  freq?: number
+}
 ```
 
 ### Application Layer
 
 #### Use Cases
 1. **SearchUseCase**: Handles tone-based search with caching
-2. **ComposeLineUseCase**: Orchestrates candidate retrieval and LLM ranking
+2. **ComposeLineUseCase**: Orchestrates heuristic prefiltering and LLM grouped selection for creative word composition
 3. **RecordFeedbackUseCase**: Records user selections for learning
+
+#### Compose Line Workflow (New MVP Approach)
+1. **Candidate Retrieval**: Fetch all words matching tone pattern from database
+2. **Heuristic Prefiltering**: Drastically reduce candidates using MVP prefilter:
+   - 1-digit tone groups: 70% top-by-frequency + 30% random remainder
+   - Multi-digit tone groups: uniform random sampling
+   - Deduplication by surface text keeping highest frequency
+   - Cap each group to maxPerGroup (default 250)
+3. **LLM Creative Selection**: Present manageable candidate groups to LLM for creative word selection based on theme/mood/context
 
 ### Infrastructure Ports
 
@@ -109,8 +128,17 @@ interface Cache {
   set<T>(key: string, value: T, ttlSec: number): Promise<void>
 }
 
-interface LlmReranker {
-  rerank(input: RerankInput): Promise<RerankResult>
+interface LlmGroupedSelector {
+  selectFromGroups(input: GroupedSelectionInput): Promise<GroupedSelectionResult>
+}
+
+interface PrefilterService {
+  prefilterGroupsByTone(
+    tonePattern: string,
+    fetchByTone: FetchByTone,
+    maxPerGroup?: number,
+    seed?: number
+  ): Promise<Group[]>
 }
 ```
 
@@ -125,8 +153,9 @@ interface LlmReranker {
 - **RedisCache**: Future implementation for production scaling
 
 #### LLM Adapters
-- **GeminiLlmReranker**: Google Gemini API integration with error handling
-- **DummyLlmReranker**: Deterministic fallback for testing/development
+- **GeminiLlmGroupedSelector**: Google Gemini API integration for creative word selection from grouped candidates
+- **DummyLlmGroupedSelector**: Deterministic fallback for testing/development
+- **MvpPrefilterService**: Heuristic candidate reduction using frequency-based and random sampling strategies
 
 #### HTTP Adapters
 - **Fastify Routes**: RESTful endpoints with Zod validation
@@ -263,10 +292,13 @@ const SearchQuerySchema = z.object({
 })
 
 const ComposeRequestSchema = z.object({
-  toneMap: z.string().refine(isValidMapped),
-  topK: z.number().int().min(1).max(200).optional(),
-  constraints: z.any().optional(),
-  context: z.any().optional()
+  tonePattern: z.string().refine(isValidMapped),
+  maxPerGroup: z.number().int().min(1).max(250).optional(),
+  theme: z.string().optional(),
+  mood: z.string().optional(),
+  genre: z.string().optional(),
+  language: z.string().optional(),
+  seed: z.number().optional()
 })
 ```
 
@@ -279,13 +311,16 @@ interface SearchResponse {
 }
 
 interface ComposeResponse {
-  ranking: RankedItem[]
+  selections: GroupSelection[]
+  line: string
+  reason?: string
 }
 
-interface RankedItem {
-  id: bigint
-  score: number
-  reason?: string
+interface GroupSelection {
+  group: number
+  option: number
+  surface: string
+  readingId: bigint
 }
 ```
 

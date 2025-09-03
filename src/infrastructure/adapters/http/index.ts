@@ -1,2 +1,1 @@
-// HTTP adapters will be defined here
-export {};
+export { FastifyServer } from './FastifyServer.js';

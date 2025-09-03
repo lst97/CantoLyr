@@ -61,25 +61,29 @@
   - Write unit tests for caching behavior
   - _Requirements: 6.1, 6.2_
 
-- [x] 8. Create LLM integration with Gemini API
+- [x] 8. Create LLM integration with Gemini API for grouped selection
 
-  - Implement GeminiLlmReranker with HTTP client
-  - Create DummyLlmReranker for testing and fallback
-  - Add Ajv schema validation for LLM responses
+  - Implement GeminiLlmGroupedSelector with HTTP client for creative word selection
+  - Create DummyLlmGroupedSelector for testing and fallback
+  - Add Ajv schema validation for LLM grouped selection responses
+  - Implement MVP prefilter service for heuristic candidate reduction
+  - Create grouped selection prompt builder for structured LLM tasks
   - Implement error handling and fallback strategies
-  - Write unit tests for LLM adapters
+  - Write unit tests for LLM adapters and prefilter logic
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.6_
 
-- [ ] 9. Implement application use cases
+- [x] 9. Implement application use cases with MVP prefilter approach
 
   - Create SearchUseCase with caching integration
-  - Implement ComposeLineUseCase with LLM ranking
+  - Implement ComposeLineUseCase with heuristic prefiltering and LLM grouped selection
+  - Integrate MVP prefilter for candidate reduction (70% freq + 30% random for 1-digit, uniform random for multi-digit)
+  - Implement grouped selection workflow: prefilter → group by tone → LLM creative selection
   - Create RecordFeedbackUseCase for user selections
-  - Implement score combination logic (70% LLM, 30% heuristic)
-  - Write unit tests for all use cases
+  - Replace score combination with deterministic grouped selection approach
+  - Write unit tests for all use cases including prefilter integration
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.3, 8.5_
 
-- [ ] 10. Set up configuration and environment management
+- [x] 10. Set up configuration and environment management
 
   - Create Zod-based configuration validation
   - Implement environment variable parsing
@@ -87,7 +91,7 @@
   - Create .env.example with all required variables
   - _Requirements: 5.1, 5.2, 5.5_
 
-- [ ] 11. Implement Fastify HTTP server setup
+- [x] 11. Implement Fastify HTTP server setup
 
   - Create Fastify application with TypeScript support
   - Set up Pino logger with request ID correlation
@@ -96,7 +100,7 @@
   - Add graceful shutdown handling
   - _Requirements: 4.1, 4.3, 4.4_
 
-- [ ] 12. Create HTTP route handlers with validation
+- [x] 12. Create HTTP route handlers with validation
 
   - Implement GET /health endpoint for health checks
   - Create GET /search endpoint with Zod validation

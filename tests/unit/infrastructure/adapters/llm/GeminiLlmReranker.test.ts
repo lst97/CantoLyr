@@ -22,7 +22,7 @@ describe('GeminiLlmReranker', () => {
   beforeEach(() => {
     config = {
       apiKey: 'test-api-key',
-      model: 'gemini-2.0-flash-001',
+      model: 'gemini-2.5-flash',
       timeoutMs: 5000,
       maxRetries: 3
     };
@@ -120,7 +120,7 @@ describe('GeminiLlmReranker', () => {
       const info = reranker.getInfo();
       expect(info).toEqual({
         provider: 'Google Gemini',
-        model: 'gemini-2.0-flash-001',
+        model: 'gemini-2.5-flash',
         version: '2.0'
       });
     });
@@ -128,7 +128,7 @@ describe('GeminiLlmReranker', () => {
     it('should use default model when not specified', () => {
       const defaultReranker = new GeminiLlmReranker({ apiKey: 'test' });
       const info = defaultReranker.getInfo();
-      expect(info.model).toBe('gemini-2.0-flash-001');
+      expect(info.model).toBe('gemini-2.5-flash');
     });
   });
 
@@ -154,7 +154,7 @@ describe('GeminiLlmReranker', () => {
         score: 0.9,
         reason: 'Perfect for romantic lyrics'
       });
-      expect(result.model).toBe('gemini-2.0-flash-001');
+      expect(result.model).toBe('gemini-2.5-flash');
       expect(result.processingTimeMs).toBeGreaterThanOrEqual(0);
     });
 

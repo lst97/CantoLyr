@@ -11,19 +11,21 @@ The CantoLyr API includes intelligent LLM-powered reranking capabilities for Can
 Uses the official Google Gen AI SDK (`@google/genai`) to integrate with Google's Gemini models.
 
 **Features:**
+
 - Official SDK integration with proper error handling
-- Support for Gemini 2.0 models
+- Support for Gemini 2.5 models
 - Configurable timeouts and retries
 - Comprehensive response validation
 - Score normalization and filtering
 
 **Configuration:**
+
 ```typescript
 import { GeminiLlmReranker } from './infrastructure/adapters/llm/GeminiLlmReranker.js';
 
 const reranker = new GeminiLlmReranker({
   apiKey: process.env.GEMINI_API_KEY,
-  model: 'gemini-2.0-flash-001', // Optional, defaults to gemini-2.0-flash-001
+  model: 'gemini-2.5-flash', // Optional, defaults to gemini-2.5-flash
   timeoutMs: 30000, // Optional, defaults to 30 seconds
   maxRetries: 3 // Optional, for future retry logic
 });
@@ -34,14 +36,16 @@ const reranker = new GeminiLlmReranker({
 Provides heuristic-based ranking without external API calls.
 
 **Features:**
+
 - Always available (no API dependencies)
 - Deterministic scoring based on multiple factors
 - Useful for testing and development
 - Fallback option when external services are unavailable
 
 **Scoring Factors:**
+
 - Frequency score (0-0.3)
-- Register preference (0-0.2) 
+- Register preference (0-0.2)
 - Part of speech preference (0-0.2)
 - Syllable count matching (0-0.15)
 - Entry type preference (0-0.1)
@@ -103,6 +107,7 @@ if (result.success) {
 The implementation has been migrated from direct HTTP calls to the official Google Gen AI SDK for better reliability and maintainability.
 
 **Benefits of SDK Migration:**
+
 - **Type Safety**: Full TypeScript support with proper interfaces
 - **Error Handling**: Built-in error handling and retry logic
 - **Maintenance**: Automatic updates and bug fixes from Google
@@ -110,13 +115,15 @@ The implementation has been migrated from direct HTTP calls to the official Goog
 - **Performance**: Optimized request handling and connection pooling
 
 **Breaking Changes:**
-- Default model changed from `gemini-pro` to `gemini-2.0-flash-001`
+
+- Default model changed from `gemini-pro` to `gemini-2.5-flash`
 - Version info updated to `2.0`
 - Improved error messages and timeout handling
 
 ### Dependencies
 
 The SDK integration requires:
+
 ```json
 {
   "dependencies": {
@@ -149,6 +156,7 @@ The implementation includes comprehensive error handling:
 ## Testing
 
 The implementation includes extensive unit tests covering:
+
 - SDK integration and mocking
 - Error scenarios and edge cases
 - Response parsing and validation
@@ -156,6 +164,7 @@ The implementation includes extensive unit tests covering:
 - Score clamping and filtering
 
 Run tests with:
+
 ```bash
 pnpm test tests/unit/infrastructure/adapters/llm/
 ```
@@ -170,6 +179,7 @@ pnpm test tests/unit/infrastructure/adapters/llm/
 ## Future Enhancements
 
 Planned improvements include:
+
 - Support for additional LLM providers (OpenAI, Claude, etc.)
 - Response caching and optimization
 - Batch processing capabilities
