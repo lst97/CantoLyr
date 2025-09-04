@@ -1,58 +1,60 @@
 {
-  "name": "cantolyr-api",
-  "version": "1.0.0",
-  "description": "CantoLyr API - Cantonese lyrics composition assistant",
-  "type": "module",
-  "main": "dist/main.js",
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js",
-    "start:dev": "tsx src/main.ts",
-    "test": "vitest --run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest --coverage",
-    "lint": "eslint src tests --ext .ts",
-    "lint:fix": "eslint src tests --ext .ts --fix",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx scripts/seed.ts",
-    "db:reset": "prisma migrate reset --force",
-    "db:populate": "tsx scripts/populate-main-db.ts"
-  },
-  "keywords": [
-    "cantonese",
-    "lyrics",
-    "api",
-    "tone-mapping",
-    "fastify",
-    "typescript"
-  ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "@fastify/cors": "^11.1.0",
-    "@fastify/swagger": "^9.5.1",
-    "@fastify/swagger-ui": "^5.2.3",
-    "@google/genai": "^1.16.0",
-    "@prisma/client": "^6.15.0",
-    "ajv": "^8.17.1",
-    "fastify": "^5.5.0",
-    "pino": "^9.9.0",
-    "prisma": "^6.15.0",
-    "zod": "^4.1.5"
-  },
-  "devDependencies": {
-    "@types/node": "^24.3.0",
-    "@typescript-eslint/eslint-plugin": "^8.42.0",
-    "@typescript-eslint/parser": "^8.42.0 ",
-    "@vitest/coverage-v8": "^3.2.4",
-    "eslint": "^9.34.0",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
-  },
-  "engines": {
-    "node": ">=22.0.0"
-  }
+	"name": "cantolyr-api",
+	"version": "1.0.0",
+	"description": "CantoLyr API - Cantonese lyrics composition assistant",
+	"type": "module",
+	"main": "dist/main.js",
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsx watch src/main.ts",
+		"start": "node dist/main.js",
+		"start:dev": "tsx src/main.ts",
+		"test": "vitest --run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest --coverage",
+		"lint": "eslint src tests --ext .ts",
+		"lint:fix": "eslint src tests --ext .ts --fix",
+		"db:generate": "prisma generate",
+		"db:migrate": "prisma migrate dev",
+		"db:reset": "prisma migrate reset --force",
+		"db:populate": "tsx scripts/populate-main-db.ts",
+		"db:bootstrap": "tsx scripts/normalize-seed-db.ts",
+		"convert:sample:zh-tw": "tsx scripts/convert-simplified-to-traditional.ts"
+	},
+	"keywords": [
+		"cantonese",
+		"lyrics",
+		"api",
+		"tone-mapping",
+		"fastify",
+		"typescript"
+	],
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"@fastify/cors": "^11.1.0",
+		"@fastify/swagger": "^9.5.1",
+		"@fastify/swagger-ui": "^5.2.3",
+		"@google/genai": "^1.16.0",
+		"@prisma/client": "^6.15.0",
+		"ajv": "^8.17.1",
+		"chinese-conv": "^1.1.0",
+		"fastify": "^5.5.0",
+		"pino": "^9.9.0",
+		"prisma": "^6.15.0",
+		"zod": "^4.1.5"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"@typescript-eslint/eslint-plugin": "^8.42.0",
+		"@typescript-eslint/parser": "^8.42.0 ",
+		"@vitest/coverage-v8": "^3.2.4",
+		"eslint": "^9.34.0",
+		"tsx": "^4.20.5",
+		"typescript": "^5.9.2",
+		"vitest": "^3.2.4"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
 }

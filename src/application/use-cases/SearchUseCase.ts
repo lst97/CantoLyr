@@ -41,7 +41,7 @@ export interface SearchOutput {
 export class SearchUseCase {
   private static readonly CACHE_TTL_SECONDS = 300; // 5 minutes
   private static readonly DEFAULT_LIMIT = 50;
-  private static readonly MAX_LIMIT = 200;
+  private static readonly MAX_LIMIT = 9999;
 
   constructor(
     private readonly readingRepo: ReadingRepo,

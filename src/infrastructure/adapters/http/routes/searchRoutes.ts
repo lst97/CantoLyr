@@ -45,7 +45,7 @@ export async function setupSearchRoutes(
             limit: {
               type: "integer",
               minimum: 1,
-              maximum: 200,
+              maximum: 1000,
               description: "Maximum number of results to return",
             },
           },

@@ -26,6 +26,9 @@ importers:
       ajv:
         specifier: ^8.17.1
         version: 8.17.1
+      chinese-conv:
+        specifier: ^1.1.0
+        version: 1.1.0
       fastify:
         specifier: ^5.5.0
         version: 5.5.0
@@ -900,6 +903,9 @@ packages:
   check-error@2.1.1:
     resolution: {integrity: sha512-OAlb+T7V4Op9OwdkjmguYRqncdlx5JiofwOAUkmTF+jNdHwzTaTs4sRAGpzLF3oOz5xAyDGrPgeIDFQmDOTiJw==}
     engines: {node: '>= 16'}
+
+  chinese-conv@1.1.0:
+    resolution: {integrity: sha512-D/ybRVt9ascTbXPqIS+GkTKTlXyExY6a8mBk5JOvsRR48emHfOqFQ2wS8ephnWLim8SYWKR+epq6dTybtgmJ7Q==}
 
   chokidar@4.0.3:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
@@ -2584,6 +2590,8 @@ snapshots:
       supports-color: 7.2.0
 
   check-error@2.1.1: {}
+
+  chinese-conv@1.1.0: {}
 
   chokidar@4.0.3:
     dependencies:

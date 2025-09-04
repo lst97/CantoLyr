@@ -196,7 +196,7 @@ model Reading {
   pos          String   // Part of speech (NOUN, ADJ, NUM, LETTER, etc.)
   register     String   // Register (formal, neutral, colloquial)
   gloss        String   // English gloss/definition
-  source       String   // Data source (lexicon_v1, charfreq_v1, etc.)
+  source       String   // Data source (lexicon_v1, words_hk_v28042025, etc.)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -241,7 +241,7 @@ The system expects JSONL (JSON Lines) format with the following structure:
     "pos": "NOUN",
     "register": "neutral",
     "gloss": "death; to perish",
-    "source": "charfreq_v1"
+    "source": "words_hk_v28042025"
   }]
 }
 ```

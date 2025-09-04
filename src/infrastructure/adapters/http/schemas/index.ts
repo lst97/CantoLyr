@@ -17,7 +17,7 @@ export const SearchQuerySchema = z.object({
   }),
   mode: z.enum(['all', 'vocab', 'char']).optional(),
   prefix: z.coerce.boolean().optional(),
-  limit: z.coerce.number().int().min(1).max(1000).optional()
+  limit: z.coerce.number().int().min(1).max(9999).optional()
 });
 
 /**
