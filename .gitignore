@@ -53,3 +53,17 @@ prisma/migrations/
 # Temporary files
 *.tmp
 *.temp
+
+# Python
+*/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*/venv/
+*/.venv/
+*/.pytest_cache/
+*/.hypothesis/
+*/.cache/
+
+# Crawler
+/.state/

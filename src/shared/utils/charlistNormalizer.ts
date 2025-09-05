@@ -122,7 +122,8 @@ export function normalizeCharlistData(
 		const lang = determineLanguage(surface);
 		const pos = determinePOS(surface);
 
-		const readings: NormalizedReading[] = [];
+    const readings: NormalizedReading[] = [];
+    const seen = new Set<string>();
 
 		for (const [jyutping, freq] of Object.entries(jyutpingFreqs)) {
 			try {
@@ -139,17 +140,23 @@ export function normalizeCharlistData(
 				// Count syllables
 				const syllables = countSyllables(normalizedJyutping);
 
-				readings.push({
-					jyutping: normalizedJyutping,
-					toneOriginal,
-					toneMapped,
-					syllables,
-					freq,
-					pos,
-					register: "NEUTRAL", // Default register for character data
-					gloss: generateGloss(surface, pos),
-					source: sourceVersion,
-				});
+            const reading: NormalizedReading = {
+                jyutping: normalizedJyutping,
+                toneOriginal,
+                toneMapped,
+                syllables,
+                freq,
+                pos,
+                register: "NEUTRAL", // Default register for character data
+                gloss: generateGloss(surface, pos),
+                source: sourceVersion,
+            };
+
+            const sig = `${reading.jyutping}|${reading.toneOriginal}`;
+            if (!seen.has(sig)) {
+                readings.push(reading);
+                seen.add(sig);
+            }
 			} catch (error) {
 				console.warn(
 					`Failed to normalize reading "${jyutping}" for character "${surface}":`,

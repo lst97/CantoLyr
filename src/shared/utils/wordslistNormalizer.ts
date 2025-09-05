@@ -55,50 +55,56 @@ export function normalizeWordslistData(
 			continue;
 		}
 
-		const normalizedReadings: WordslistReading[] = [];
+    const normalizedReadings: WordslistReading[] = [];
+    const seen = new Set<string>();
 
 		for (const jyutping of jyutpingArray) {
-			try {
-				// Sanitize and normalize jyutping
-				const sanitized = sanitizeJyutping(jyutping);
-				if (!sanitized.trim()) {
-					// Skip if empty after sanitization
-					continue;
-				}
-				const normalizedJyutping = normalizeJyutping(sanitized);
+        try {
+            // Sanitize and normalize jyutping
+            const sanitized = sanitizeJyutping(jyutping);
+            if (!sanitized.trim()) {
+                // Skip if empty after sanitization
+                continue;
+            }
+            const normalizedJyutping = normalizeJyutping(sanitized);
 
-				// Extract tones
-				const toneOriginal = extractTones(normalizedJyutping);
+            // Extract tones
+            const toneOriginal = extractTones(normalizedJyutping);
 
-				// Map tones
-				const toneMap = ToneMap.mapTones(toneOriginal);
-				const toneMapped = toneMap.value;
+            // Map tones
+            const toneMap = ToneMap.mapTones(toneOriginal);
+            const toneMapped = toneMap.value;
 
-				// Count syllables
-				const syllables = countSyllables(normalizedJyutping);
+            // Count syllables
+            const syllables = countSyllables(normalizedJyutping);
 
-				// Create normalized reading
-				const reading: WordslistReading = {
-					jyutping: normalizedJyutping,
-					toneOriginal,
-					toneMapped,
-					syllables,
-					freq: 1, // Default frequency since wordslist doesn't provide frequency data
-					pos: inferPartOfSpeech(word, syllables),
-					register: inferRegister(word, syllables),
-					gloss: generateGloss(word),
-					source,
-				};
+            // Create normalized reading
+            const reading: WordslistReading = {
+                jyutping: normalizedJyutping,
+                toneOriginal,
+                toneMapped,
+                syllables,
+                freq: 1, // Default frequency since wordslist doesn't provide frequency data
+                pos: inferPartOfSpeech(word, syllables),
+                register: inferRegister(word, syllables),
+                gloss: generateGloss(word),
+                source,
+            };
 
-				normalizedReadings.push(reading);
-			} catch (error) {
-				console.warn(
-					`Failed to normalize reading "${jyutping}" for word "${word}":`,
-					error
-				);
-				continue;
-			}
-		}
+            // Deduplicate readings by jyutping + toneOriginal signature
+            const sig = `${reading.jyutping}|${reading.toneOriginal}`;
+            if (!seen.has(sig)) {
+                normalizedReadings.push(reading);
+                seen.add(sig);
+            }
+        } catch (error) {
+            console.warn(
+                `Failed to normalize reading "${jyutping}" for word "${word}":`,
+                error
+            );
+            continue;
+        }
+    }
 
 		if (normalizedReadings.length > 0) {
 			entries.push({

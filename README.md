@@ -63,6 +63,7 @@ A minimal MVP system designed to help lyricists compose Cantonese lyrics by prov
    The seeding process may take a few minutes to complete.
 
 7. Start the development server:
+
    ```bash
    pnpm run dev
    ```

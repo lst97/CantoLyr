@@ -2,32 +2,20 @@
 
 /**
  * One-shot bootstrap script:
- * - Ensures DB is reachable and schema is applied (Prisma migrate deploy)
- * - Normalizes sample data (chars + words) and enriches gloss from detail files
+ * - Ensures DB is reachable and schema is applied
+ * - Normalizes sample data (chars + words), enriches gloss from detail files
  * - Seeds the normalized data into the main database
  *
  * Usage: tsx scripts/normalize-seed-db.ts
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { spawnSync } from 'child_process';
 import { PrismaClient } from '@prisma/client';
 import { normalizeCharlistData, entriesToJSONL as charsToJSONL, type CharlistData } from '../src/shared/utils/charlistNormalizer.js';
 import { normalizeWordslistData, entriesToJSONL as wordsToJSONL, type WordslistData } from '../src/shared/utils/wordslistNormalizer.js';
 import { createDatabaseSeeder } from '../src/shared/utils/databaseSeeder.js';
 import { checkDatabaseConnection } from '../src/infrastructure/config/database.js';
-
-type CharDetailItem = {
-  char: string;
-  pronunciations?: Array<{
-    explanations?: Array<{ content?: string }>;
-  }>;
-};
-
-type WordDetailItem = {
-  word: string;
-  explanation?: string;
-};
+import { loadCharDetail, loadWordDetail } from './utils/dataFiles.js';
 
 async function waitForDbReady(retries = 30, delayMs = 2000) {
   for (let i = 1; i <= retries; i++) {
@@ -37,67 +25,6 @@ async function waitForDbReady(retries = 30, delayMs = 2000) {
     await new Promise(r => setTimeout(r, delayMs));
   }
   return false;
-}
-
-function parseConcatenatedJsonObjects(raw: string): any[] {
-  const objs: string[] = [];
-  let depth = 0, inStr = false, esc = false, start = -1;
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (ch === '\\') esc = true;
-      else if (ch === '"') inStr = false;
-    } else {
-      if (ch === '"') inStr = true;
-      else if (ch === '{') { if (depth === 0) start = i; depth++; }
-      else if (ch === '}') { depth--; if (depth === 0 && start >= 0) { objs.push(raw.slice(start, i + 1)); start = -1; } }
-    }
-  }
-  return objs.map((s) => { try { return JSON.parse(s); } catch { return null; } }).filter(Boolean);
-}
-
-function loadCharDetail(filePath: string): Map<string, string> {
-  if (!existsSync(filePath)) return new Map();
-  const raw = readFileSync(filePath, 'utf-8');
-  let items: CharDetailItem[] = [];
-  try {
-    const parsed = JSON.parse(raw);
-    items = Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
-    items = parseConcatenatedJsonObjects(raw) as CharDetailItem[];
-  }
-  const map = new Map<string, string>();
-  for (const item of items) {
-    if (!item || typeof item.char !== 'string') continue;
-    const contents: string[] = [];
-    for (const p of item.pronunciations || []) {
-      for (const ex of p.explanations || []) {
-        if (ex && typeof ex.content === 'string' && ex.content.trim()) contents.push(ex.content.trim());
-      }
-    }
-    if (contents.length) map.set(item.char, contents.join('； '));
-  }
-  return map;
-}
-
-function loadWordDetail(filePath: string): Map<string, string> {
-  if (!existsSync(filePath)) return new Map();
-  const raw = readFileSync(filePath, 'utf-8');
-  let items: WordDetailItem[] = [];
-  try {
-    const parsed = JSON.parse(raw);
-    items = Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
-    items = parseConcatenatedJsonObjects(raw) as WordDetailItem[];
-  }
-  const map = new Map<string, string>();
-  for (const item of items) {
-    if (!item || typeof item.word !== 'string') continue;
-    const gloss = (item.explanation || '').trim();
-    if (gloss) map.set(item.word, gloss);
-  }
-  return map;
 }
 
 async function main() {
@@ -118,14 +45,7 @@ async function main() {
   }
   console.log('✅ Database is reachable');
 
-  // 2) Apply Prisma migrations (schema init)
-  console.log('🧭 Applying Prisma migrations (migrate deploy)...');
-  const migrate = spawnSync('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
-  if (migrate.status !== 0) {
-    console.error('❌ Prisma migrate deploy failed.');
-    process.exit(migrate.status ?? 1);
-  }
-  console.log('✅ Migrations applied');
+  
 
   // Track char surfaces for dedup
   const charSurfaces = new Set<string>();
@@ -140,7 +60,7 @@ async function main() {
     const charData: CharlistData = JSON.parse(rawChar);
     const charEntries = normalizeCharlistData(charData, 'words_hk_charlist_v28042025');
     for (const e of charEntries) charSurfaces.add(e.surface);
-    const glossMap = loadCharDetail(charDetail);
+    const glossMap = existsSync(charDetail) ? loadCharDetail(charDetail) : new Map();
     for (const entry of charEntries) {
       const g = glossMap.get(entry.surface);
       if (g) {
@@ -170,7 +90,7 @@ async function main() {
       const removed = before - after;
       if (removed > 0) console.log(`🧹 Deduped ${removed} vocab entries present in chars (${before} -> ${after}).`);
     }
-    const glossMap = loadWordDetail(wordDetail);
+    const glossMap = existsSync(wordDetail) ? loadWordDetail(wordDetail) : new Map();
     for (const entry of wordEntries) {
       const g = glossMap.get(entry.surface);
       if (g) {
