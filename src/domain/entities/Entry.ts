@@ -93,7 +93,8 @@ export class Entry {
    * Get all unique tone patterns for this entry
    */
   getTonePatterns(): string[] {
-    const patterns = new Set(this.readings.map(r => r.toneMapped.value));
+    // pronunciation already stores mapped tone digits
+    const patterns = new Set(this.readings.map(r => r.pronunciation));
     return Array.from(patterns).sort();
   }
 

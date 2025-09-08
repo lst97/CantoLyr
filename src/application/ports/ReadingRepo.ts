@@ -5,7 +5,7 @@ import type { EntryType } from '../../shared/types/common.js';
  */
 export interface SearchQuery {
   /** Mapped tone pattern to search for (e.g., "403") */
-  toneMapped: string;
+  pronunciation: string;
   /** Whether to treat the pattern as a prefix */
   isPrefix?: boolean;
   /** Filter by entry type */
@@ -30,12 +30,16 @@ export interface ReadingDTO {
   type: EntryType;
   /** Language code */
   lang: string;
-  /** Jyutping pronunciation */
-  jyutping: string;
-  /** Original tone pattern extracted from jyutping */
-  toneOriginal: string;
-  /** Mapped tone pattern using tone conversion */
-  toneMapped: string;
+  /** Jyutping grouped to surface tokens */
+  jyutping: string[];
+  /** Original tone pattern */
+  tone: string;
+  /** Mapped tone pattern (pronunciation) */
+  pronunciation: string;
+  /** Per-syllable initials */
+  consonants: string[];
+  /** Per-syllable rhymes */
+  rhymes: string[];
   /** Number of syllables */
   syllables: number;
   /** Frequency score */
@@ -56,12 +60,6 @@ export interface ReadingDTO {
  */
 export interface ReadingRepo {
   /**
-   * Search for readings by mapped tone pattern
-   * Results are ordered deterministically by type, syllables, tone mapping, and jyutping
-   */
-  searchByToneMapped(query: SearchQuery): Promise<ReadingDTO[]>;
-
-  /**
    * Get specific readings by their IDs
    * Used for compose operations and feedback recording
    */
@@ -73,8 +71,17 @@ export interface ReadingRepo {
    */
   getById(id: bigint): Promise<ReadingDTO | null>;
 
-  /**
-   * Count total results for a search query (for pagination)
-   */
-  countByToneMapped(query: Omit<SearchQuery, 'limit' | 'offset'>): Promise<number>;
+  /** Search by new mapped pronunciation field (equivalent to toneMapped) */
+  searchByPronunciation(query: SearchQuery): Promise<ReadingDTO[]>;
+
+  /** Count by new pronunciation field */
+  countByPronunciation(query: Omit<SearchQuery, 'limit' | 'offset'>): Promise<number>;
+
+  /** Find readings that contain a specific rhyme in their decomposition */
+  searchByRhyme(query: {
+    rhyme: string;
+    entryType?: EntryType;
+    limit?: number;
+    offset?: number;
+  }): Promise<ReadingDTO[]>;
 }

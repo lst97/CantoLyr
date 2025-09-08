@@ -1,0 +1,41 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/onnxruntime-common?target=denonext": "https://esm.sh/onnxruntime-common@1.22.0?target=denonext"
+  },
+  "remote": {
+    "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2/+esm": "7fc4a6d67deb391f0881b70c0808ea69bbcf6435bd50444929065493a82a3d4a",
+    "https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm": "ab3e83763c146a8d9f539fbb1ae81fb429095ec8006235bacb8a22eda7d6ea6c",
+    "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/+esm": "53bf11d80531b341f46d4dc695a3d143d8b4c71d30e43905f9588db9804832db",
+    "https://esm.sh/@huggingface/transformers@3.7.2": "9d2b9422323f213ac88872f8039ed1c3e7e03e36d4d8cf84c138f12b21ea864f",
+    "https://esm.sh/@huggingface/transformers@3.7.2/denonext/transformers.mjs": "463e224a6be69f6c8d20847198b4d450a084cc540de5f2b5591517f744c32c76",
+    "https://esm.sh/onnxruntime-common@1.22.0/denonext/onnxruntime-common.mjs": "728af92b773ccfc3d781f381a915736dc6424050b8dd830b932e1c6df8fed1a7",
+    "https://esm.sh/onnxruntime-common@1.22.0?target=denonext": "7bc47b761f40e7433642fcf8fc535168d1cea385b2facb78ce6e91c645eccaa3",
+    "https://esm.sh/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/denonext/onnxruntime-web.mjs": "e027f8b3180f2aa6408e27d621fa3c7ee2dce79b32e9ba2027bf37cc4788b963"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@fastify/cors@^11.1.0",
+        "npm:@google/genai@^1.17.0",
+        "npm:@huggingface/transformers@3",
+        "npm:@prisma/client@^6.15.0",
+        "npm:@types/node@^24.3.1",
+        "npm:@typescript-eslint/eslint-plugin@^8.42.0",
+        "npm:@typescript-eslint/parser@^8.42.0",
+        "npm:@vitest/coverage-v8@^3.2.4",
+        "npm:ajv@^8.17.1",
+        "npm:chinese-conv@^1.1.0",
+        "npm:chromadb@^3.0.14",
+        "npm:eslint@^9.35.0",
+        "npm:fastify@^5.6.0",
+        "npm:pino@^9.9.4",
+        "npm:prisma@^6.15.0",
+        "npm:tsx@^4.20.5",
+        "npm:typescript@^5.9.2",
+        "npm:vitest@^3.2.4",
+        "npm:zod@^4.1.5"
+      ]
+    }
+  }
+}

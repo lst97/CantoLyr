@@ -90,8 +90,8 @@ export class ComposeLineUseCase {
 
     // Create fetch function for prefilter
     const fetchByTone: FetchByTone = async (toneMapped: string, limit: number) => {
-      return await this.readingRepo.searchByToneMapped({
-        toneMapped,
+      return await this.readingRepo.searchByPronunciation({
+        pronunciation: toneMapped,
         limit
       });
     };

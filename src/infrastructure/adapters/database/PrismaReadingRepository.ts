@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import type { ReadingRepo, SearchQuery, ReadingDTO } from '../../../application/ports/ReadingRepo.js';
+import type { ReadingRepo, ReadingDTO } from '../../../application/ports/ReadingRepo.js';
 import type { EntryType } from '../../../shared/types/common.js';
 
 /**
@@ -8,49 +8,6 @@ import type { EntryType } from '../../../shared/types/common.js';
  */
 export class PrismaReadingRepository implements ReadingRepo {
   constructor(private readonly prisma: PrismaClient) {}
-
-  /**
-   * Search for readings by mapped tone pattern with optimized queries
-   * Results are ordered deterministically by type, syllables, tone mapping, and jyutping
-   */
-  async searchByToneMapped(query: SearchQuery): Promise<ReadingDTO[]> {
-    const {
-      toneMapped,
-      isPrefix = false,
-      entryType,
-      limit = 50,
-      offset = 0
-    } = query;
-
-    // Build the where clause for tone matching
-    const toneCondition = isPrefix
-      ? { startsWith: toneMapped }
-      : { equals: toneMapped };
-
-    // Build the entry type filter
-    const entryTypeCondition = entryType ? { type: entryType } : {};
-
-    const readings = await this.prisma.reading.findMany({
-      where: {
-        toneMapped: toneCondition,
-        entry: entryTypeCondition
-      },
-      include: {
-        entry: true
-      },
-      orderBy: [
-        // Deterministic ordering as specified in requirements
-        { entry: { type: 'asc' } },    // vocab before char
-        { syllables: 'asc' },          // fewer syllables first
-        { toneMapped: 'asc' },         // alphabetical tone pattern
-        { jyutping: 'asc' }            // alphabetical jyutping
-      ],
-      take: limit,
-      skip: offset
-    });
-
-    return readings.map(this.mapToDTO);
-  }
 
   /**
    * Get specific readings by their IDs
@@ -72,8 +29,7 @@ export class PrismaReadingRepository implements ReadingRepo {
         // Maintain deterministic ordering
         { entry: { type: 'asc' } },
         { syllables: 'asc' },
-        { toneMapped: 'asc' },
-        { jyutping: 'asc' }
+        { pronunciation: 'asc' },
       ]
     });
 
@@ -96,29 +52,86 @@ export class PrismaReadingRepository implements ReadingRepo {
   }
 
   /**
-   * Count total results for a search query (for pagination)
+   * Count results by pronunciation (new mapped tone field)
    */
-  async countByToneMapped(query: Omit<SearchQuery, 'limit' | 'offset'>): Promise<number> {
-    const {
-      toneMapped,
-      isPrefix = false,
-      entryType
-    } = query;
-
-    // Build the where clause for tone matching
-    const toneCondition = isPrefix
-      ? { startsWith: toneMapped }
-      : { equals: toneMapped };
-
-    // Build the entry type filter
+  async countByPronunciation(query: {
+    pronunciation: string;
+    isPrefix?: boolean;
+    entryType?: EntryType;
+  }): Promise<number> {
+    const { pronunciation, isPrefix = false, entryType } = query;
+    const pronunciationCondition = isPrefix
+      ? { startsWith: pronunciation }
+      : { equals: pronunciation };
     const entryTypeCondition = entryType ? { type: entryType } : {};
-
     return await this.prisma.reading.count({
       where: {
-        toneMapped: toneCondition,
-        entry: entryTypeCondition
-      }
+        pronunciation: pronunciationCondition,
+        entry: entryTypeCondition,
+      },
     });
+  }
+
+  /**
+   * Search by new pronunciation column, with optional prefix
+   */
+  async searchByPronunciation(query: {
+    pronunciation: string;
+    isPrefix?: boolean;
+    entryType?: EntryType;
+    limit?: number;
+    offset?: number;
+  }): Promise<ReadingDTO[]> {
+    const { pronunciation, isPrefix = false, entryType, limit = 50, offset = 0 } = query;
+    const pronunciationCondition = isPrefix
+      ? { startsWith: pronunciation }
+      : { equals: pronunciation };
+    const entryTypeCondition = entryType ? { type: entryType } : {};
+
+    const readings = await this.prisma.reading.findMany({
+      where: {
+        pronunciation: pronunciationCondition,
+        entry: entryTypeCondition
+      },
+      include: { entry: true },
+      orderBy: [
+        { entry: { type: 'asc' } },
+        { syllables: 'asc' },
+        { pronunciation: 'asc' },
+      ],
+      take: limit,
+      skip: offset
+    });
+    return readings.map(this.mapToDTO);
+  }
+
+  /**
+   * Search by rhyme token contained in the rhymes array column
+   */
+  async searchByRhyme(query: {
+    rhyme: string;
+    entryType?: EntryType;
+    limit?: number;
+    offset?: number;
+  }): Promise<ReadingDTO[]> {
+    const { rhyme, entryType, limit = 50, offset = 0 } = query;
+    const entryTypeCondition = entryType ? { type: entryType } : {};
+
+    const readings = await this.prisma.reading.findMany({
+      where: {
+        rhymes: { has: rhyme },
+        entry: entryTypeCondition
+      },
+      include: { entry: true },
+      orderBy: [
+        { entry: { type: 'asc' } },
+        { syllables: 'asc' },
+        { pronunciation: 'asc' },
+      ],
+      take: limit,
+      skip: offset
+    });
+    return readings.map(this.mapToDTO);
   }
 
   /**
@@ -132,8 +145,10 @@ export class PrismaReadingRepository implements ReadingRepo {
       type: reading.entry.type as EntryType,
       lang: reading.entry.lang,
       jyutping: reading.jyutping,
-      toneOriginal: reading.toneOriginal,
-      toneMapped: reading.toneMapped,
+      tone: reading.tone,
+      pronunciation: reading.pronunciation,
+      consonants: Array.isArray(reading.consonants) ? reading.consonants : [],
+      rhymes: Array.isArray(reading.rhymes) ? reading.rhymes : [],
       syllables: reading.syllables,
       freq: reading.freq,
       pos: reading.pos,

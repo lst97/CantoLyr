@@ -3,32 +3,15 @@
  * Converts character frequency data to standardized Entry/Reading format
  */
 
-import { extractTones, countSyllables, normalizeJyutping } from "./jyutping.js";
-import { ToneMap } from "../../domain/value-objects/ToneMap.js";
+import { normalizeJyutping } from "./jyutping.js";
+import { readFileSync } from "fs";
+import path from "path";
+import type { NormalizedEntry, NormalizedReading } from "../types/data.js";
 
 export interface CharlistData {
 	[surface: string]: {
 		[jyutping: string]: number; // frequency
 	};
-}
-
-export interface NormalizedReading {
-	jyutping: string;
-	toneOriginal: string;
-	toneMapped: string;
-	syllables: number;
-	freq: number;
-	pos: string;
-	register: string;
-	gloss: string;
-	source: string;
-}
-
-export interface NormalizedEntry {
-	surface: string;
-	type: "char" | "vocab";
-	lang: string;
-	readings: NormalizedReading[];
 }
 
 /**
@@ -58,23 +41,106 @@ function determineLanguage(surface: string): string {
 	return "misc";
 }
 
+// ---- Cantonese Pinyin Table loading and helpers ----
+type CantonesePinyinTable = {
+	consonants: string[];
+	rhymes: string[];
+	tones: Record<string, string>;
+};
+
+let CANTONESE_TABLE: CantonesePinyinTable | null = null;
+
+function loadCantoneseTable(): CantonesePinyinTable {
+	if (CANTONESE_TABLE) return CANTONESE_TABLE;
+	const tablePath = path.resolve(
+		process.cwd(),
+		"data/sample/cantonese_pinyin_table.json"
+	);
+	const raw = readFileSync(tablePath, "utf-8");
+	CANTONESE_TABLE = JSON.parse(raw) as CantonesePinyinTable;
+	return CANTONESE_TABLE!;
+}
+
+function mapTonesToPronunciation(original: string): string {
+	const table = loadCantoneseTable();
+	return original
+		.split("")
+		.map(
+			(d) =>
+				table.tones[d] ??
+				(() => {
+					throw new Error(`Invalid original tone digit: "${d}"`);
+				})()
+		)
+		.join("");
+}
+
+function splitSyllable(s: string): {
+	initial: string;
+	rhyme: string;
+	tone: string;
+} {
+	const table = loadCantoneseTable();
+	const m = s.match(/^([a-z]+?)([1-6])$/);
+	if (!m) {
+		// Try special cases like "m4" or "ng4" or malformed tokens; best-effort
+		const t = s.match(/[1-6](?=[^1-6]*$)/)?.[0] ?? "";
+		const base = t ? s.replace(new RegExp(`${t}$`), "") : s;
+		return { initial: "", rhyme: base, tone: t };
+	}
+	const base = m[1];
+	const tone = m[2];
+	// Choose the longest matching initial
+	const initials = table.consonants.slice().sort((a, b) => b.length - a.length);
+	let initial = "";
+	for (const c of initials) {
+		if (base?.startsWith(c)) {
+			initial = c;
+			break;
+		}
+	}
+	const rhyme = base?.slice(initial.length);
+	// If rhyme not in table, keep as-is (best effort)
+	return { initial, rhyme: rhyme!, tone: tone! };
+}
+
+function groupTokensIntoKGroups(tokens: string[], k: number): string[] {
+	if (k <= 1) return [tokens.join(" ")];
+	if (tokens.length === k) return tokens.slice();
+	const groups: string[][] = Array.from({ length: k }, () => []);
+	let idx = 0;
+	for (const tok of tokens) {
+		groups[idx]?.push(tok);
+		// Distribute as evenly as possible
+		if (idx < k - 1 && groups[idx]!.length > Math.ceil(tokens.length / k)) {
+			idx++;
+		} else if (idx < k - 1) {
+			const remainingTokens = tokens.length - groups.flat().length;
+			const remainingGroups = k - 1 - idx;
+			const idealNext = Math.ceil(remainingTokens / remainingGroups);
+			if (groups[idx]!.length >= idealNext) idx++;
+		}
+	}
+	return groups.map((g) => g.join(" ").trim()).map((s) => (s.length ? s : ""));
+}
+
 /**
  * Determines part of speech based on surface text
  */
-function determinePOS(surface: string): string {
+function determinePOS(surface: string): import("../types/common.js").PartOfSpeech {
 	// Numbers
 	if (/^[0-9]$/.test(surface)) {
-		return "NUM";
+    return "NUM";
 	}
 
 	// ASCII letters
 	if (/^[A-Za-z]$/.test(surface)) {
-		return "LETTER";
+    return "LETTER";
 	}
 
 	// For Chinese characters, default to NOUN
 	// In a real system, this would require linguistic analysis
-	return "NOUN";
+    return "NOUN";
 }
 
 /**
@@ -122,41 +188,50 @@ export function normalizeCharlistData(
 		const lang = determineLanguage(surface);
 		const pos = determinePOS(surface);
 
-    const readings: NormalizedReading[] = [];
-    const seen = new Set<string>();
+		const readings: NormalizedReading[] = [];
+		const seen = new Set<string>();
 
 		for (const [jyutping, freq] of Object.entries(jyutpingFreqs)) {
 			try {
 				// Normalize jyutping
 				const normalizedJyutping = normalizeJyutping(jyutping);
 
-				// Extract tones
-				const toneOriginal = extractTones(normalizedJyutping);
+				// Extract per-syllable components
+				const syllableTokens = normalizedJyutping.split(/\s+/).filter(Boolean);
+				const components = syllableTokens.map(splitSyllable);
+				const tone = components.map((c) => c.tone).join("");
+				const pronunciation = mapTonesToPronunciation(tone);
+				const consonants = components.map((c) => c.initial);
+				const rhymes = components.map((c) => c.rhyme);
+				const syllables = components.length;
 
-				// Map tones
-				const toneMap = ToneMap.mapTones(toneOriginal);
-				const toneMapped = toneMap.value;
+				// Group jyutping by surface tokens length
+				const surfaceTokenCount =
+					surface.trim().split(/\s+/).filter(Boolean).length || 1;
+				const groupedJyutping = groupTokensIntoKGroups(
+					syllableTokens,
+					surfaceTokenCount
+				);
 
-				// Count syllables
-				const syllables = countSyllables(normalizedJyutping);
+        const reading: NormalizedReading = {
+          jyutping: groupedJyutping,
+          tone,
+          pronunciation,
+          consonants,
+          rhymes,
+          syllables,
+          freq,
+          pos,
+          register: "neutral", // Default register for character data
+          gloss: generateGloss(surface, pos),
+          source: sourceVersion,
+        };
 
-            const reading: NormalizedReading = {
-                jyutping: normalizedJyutping,
-                toneOriginal,
-                toneMapped,
-                syllables,
-                freq,
-                pos,
-                register: "NEUTRAL", // Default register for character data
-                gloss: generateGloss(surface, pos),
-                source: sourceVersion,
-            };
-
-            const sig = `${reading.jyutping}|${reading.toneOriginal}`;
-            if (!seen.has(sig)) {
-                readings.push(reading);
-                seen.add(sig);
-            }
+				const sig = `${normalizedJyutping}|${tone}`;
+				if (!seen.has(sig)) {
+					readings.push(reading);
+					seen.add(sig);
+				}
 			} catch (error) {
 				console.warn(
 					`Failed to normalize reading "${jyutping}" for character "${surface}":`,

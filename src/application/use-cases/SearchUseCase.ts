@@ -1,4 +1,4 @@
-import type { ReadingRepo, SearchQuery, ReadingDTO } from '../ports/ReadingRepo.js';
+import type { ReadingRepo, ReadingDTO } from '../ports/ReadingRepo.js';
 import type { Cache } from '../ports/Cache.js';
 import type { EntryType } from '../../shared/types/common.js';
 
@@ -72,23 +72,20 @@ export class SearchUseCase {
     }
 
     // Execute search query
-    const searchQuery: SearchQuery = {
-      toneMapped: normalizedInput.tonePattern,
+    const items = await this.readingRepo.searchByPronunciation({
+      pronunciation: normalizedInput.tonePattern,
       isPrefix: normalizedInput.isPrefix,
       limit: normalizedInput.limit,
       offset: normalizedInput.offset,
       ...(normalizedInput.entryType && { entryType: normalizedInput.entryType })
-    };
-
-    const items = await this.readingRepo.searchByToneMapped(searchQuery);
+    });
 
     // Get total count for pagination (without limit/offset)
-    const countQuery = {
-      toneMapped: normalizedInput.tonePattern,
+    const count = await this.readingRepo.countByPronunciation({
+      pronunciation: normalizedInput.tonePattern,
       isPrefix: normalizedInput.isPrefix,
       ...(normalizedInput.entryType && { entryType: normalizedInput.entryType })
-    };
-    const count = await this.readingRepo.countByToneMapped(countQuery);
+    });
 
     const result: SearchOutput = {
       query: normalizedInput.tonePattern,

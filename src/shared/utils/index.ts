@@ -10,9 +10,12 @@ export {
   entriesToJSONL,
   processCharlistToJSONL,
   type CharlistData,
+} from './charlistNormalizer.js';
+
+export {
   type NormalizedReading,
   type NormalizedEntry
-} from './charlistNormalizer.js';
+} from '../types/data.js';
 
 export {
   normalizeWordslistData,

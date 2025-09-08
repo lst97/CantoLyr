@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import type { AppConfig } from '../../config/AppConfig.js';
 import type { Container } from '../../container/Container.js';
 import { setupSearchRoutes, setupComposeRoutes, setupFeedbackRoutes, setupHealthRoutes } from './routes/index.js';
+import { buildOpenApiDocument } from './openapi.js';
 
 /**
  * Fastify server wrapper with TypeScript support
@@ -128,90 +129,42 @@ export class FastifyServer {
   }
 
   /**
-   * Setup Swagger/OpenAPI documentation
+   * Setup API documentation (ReDoc + static OpenAPI JSON)
    */
-  private async setupSwagger(): Promise<void> {
+  private async setupDocs(): Promise<void> {
     if (!this.config.server.enableSwagger) {
       return;
     }
 
-    // Register Swagger plugin
-    await this.app.register(import('@fastify/swagger'), {
-      openapi: {
-        openapi: '3.0.0',
-        info: {
-          title: 'CantoLyr API',
-          description: 'Cantonese lyrics composition assistant API',
-          version: '1.0.0',
-          contact: {
-            name: 'CantoLyr API Support',
-            email: 'support@cantolyr.com',
-          },
-          license: {
-            name: 'MIT',
-            url: 'https://opensource.org/licenses/MIT',
-          },
-        },
-        servers: [
-          {
-            url: `http://${this.config.server.host}:${this.config.server.port}`,
-            description: 'Development server',
-          },
-        ],
-        tags: [
-          {
-            name: 'health',
-            description: 'Health check endpoints',
-          },
-          {
-            name: 'search',
-            description: 'Character and word search endpoints',
-          },
-          {
-            name: 'compose',
-            description: 'Lyrical composition endpoints',
-          },
-          {
-            name: 'feedback',
-            description: 'User feedback endpoints',
-          },
-        ],
-        components: {
-          schemas: {
-            Error: {
-              type: 'object',
-              properties: {
-                error: {
-                  type: 'object',
-                  properties: {
-                    code: { type: 'string' },
-                    message: { type: 'string' },
-                    requestId: { type: 'string' },
-                    details: { type: 'object' },
-                  },
-                  required: ['code', 'message', 'requestId'],
-                },
-              },
-              required: ['error'],
-            },
-          },
-        },
-      },
+    // Build static OpenAPI spec and expose as JSON
+    const spec = buildOpenApiDocument(this.config);
+    this.app.get('/openapi.json', async (_request, reply) => {
+      return reply.type('application/json').send(spec);
     });
 
-    // Register Swagger UI
-    await this.app.register(import('@fastify/swagger-ui'), {
-      routePrefix: '/docs',
-      uiConfig: {
-        docExpansion: 'list',
-        deepLinking: false,
-      },
-      staticCSP: true,
-      transformStaticCSP: (header) => header,
-      transformSpecification: (swaggerObject) => {
-        return swaggerObject;
-      },
-      transformSpecificationClone: true,
+    // Register ReDoc UI at /docs, rendering the JSON spec from /openapi/json
+    this.app.get('/docs', async (_request, reply) => {
+      const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CantoLyr API Docs</title>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', Arial, sans-serif; }
+      #redoc-container { height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="redoc-container"></div>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+    <script>
+      Redoc.init('/openapi.json', { hideDownloadButton: true, expandResponses: '200,201,4XX,5XX' }, document.getElementById('redoc-container'));
+    </script>
+  </body>
+  </html>`;
+      return reply.type('text/html').send(html);
     });
   }
 
@@ -333,8 +286,8 @@ export class FastifyServer {
       // Setup routes first
       await this.setupRoutes();
       
-      // Setup Swagger documentation
-      await this.setupSwagger();
+      // Setup API docs (ReDoc)
+      await this.setupDocs();
 
       // Start listening
       const address = await this.app.listen({
@@ -356,11 +309,12 @@ export class FastifyServer {
       this.app.log.info('Available routes:');
       this.app.log.info(`  GET  /         - API information`);
       this.app.log.info(`  GET  /health   - Health check`);
-      this.app.log.info(`  GET  /search   - Search characters/words by tone`);
+      this.app.log.info(`  GET  /search/pronunciation   - Search by pronunciation pattern`);
+      this.app.log.info(`  GET  /search/rhyme           - Search by rhyme token`);
       this.app.log.info(`  POST /compose/line - Compose lyrical line`);
       this.app.log.info(`  POST /feedback/select - Record user feedback`);
       if (this.config.server.enableSwagger) {
-        this.app.log.info(`  GET  /docs     - API documentation`);
+        this.app.log.info(`  GET  /docs     - API documentation (ReDoc)`);
       }
 
     } catch (error) {

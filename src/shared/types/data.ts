@@ -18,7 +18,14 @@ export interface RawEntry {
  * Raw reading structure as it appears in JSONL files
  */
 export interface RawReading {
-  jyutping: string;
+  // Updated: allow array form matching surface tokenization
+  jyutping: string | string[];
+  // New optional fields accepted from newer normalizers
+  tone?: string | undefined; // original tones
+  pronunciation?: string | undefined; // mapped tones
+  consonants?: string[] | undefined;
+  rhymes?: string[] | undefined;
+  // Existing fields
   freq: number;
   pos: string;
   register: string;
@@ -40,9 +47,11 @@ export interface NormalizedEntry {
  * Normalized reading structure with extracted and mapped tones
  */
 export interface NormalizedReading {
-  jyutping: string;
-  toneOriginal: string;
-  toneMapped: string;
+  jyutping: string[];
+  tone: string;
+  pronunciation: string;
+  consonants?: string[];
+  rhymes?: string[];
   syllables: number;
   freq: number;
   pos: PartOfSpeech;

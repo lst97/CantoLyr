@@ -171,21 +171,31 @@ export class DatabaseSeeder {
             insertedEntries++;
 
             // Insert readings for this entry
-            for (const reading of entry.readings) {
-              await tx.reading.create({
-                data: {
-                  entryId: createdEntry.id,
-                  jyutping: reading.jyutping,
-                  toneOriginal: reading.toneOriginal,
-                  toneMapped: reading.toneMapped,
-                  syllables: reading.syllables,
-                  freq: reading.freq,
-                  pos: reading.pos,
-                  register: reading.register,
-                  gloss: reading.gloss,
-                  source: reading.source
-                }
-              });
+            for (const reading of entry.readings as any[]) {
+              const tokens: string[] = Array.isArray((reading as any).jyutpingTokens)
+                ? (reading as any).jyutpingTokens
+                : Array.isArray((reading as any).jyutping)
+                  ? (reading as any).jyutping
+                  : String((reading as any).jyutping || '')
+                      .trim()
+                      .split(/\s+/)
+                      .filter(Boolean);
+
+              const data: any = {
+                entryId: createdEntry.id,
+                jyutping: tokens as any,
+                tone: (reading as any).tone ?? (reading as any).toneOriginal,
+                pronunciation: (reading as any).pronunciation ?? (reading as any).toneMapped,
+                consonants: (reading as any).consonants ?? [],
+                rhymes: (reading as any).rhymes ?? [],
+                syllables: (reading as any).syllables,
+                freq: (reading as any).freq,
+                pos: (reading as any).pos,
+                register: (reading as any).register,
+                gloss: (reading as any).gloss,
+                source: (reading as any).source
+              };
+              await tx.reading.create({ data: data as any });
 
               insertedReadings++;
             }
@@ -193,12 +203,18 @@ export class DatabaseSeeder {
 
           return { entries: insertedEntries, readings: insertedReadings };
         });
-
       } catch (error) {
         attempt++;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Batch insertion failed (attempt ${attempt}): ${message}`);
+        // Log a small sample of the batch to help debugging
+        try {
+          const sample = entries.slice(0, 1)[0];
+          console.error('   ↳ Sample entry:', JSON.stringify(sample));
+        } catch {}
         
         if (attempt >= this.config.maxRetries) {
-          throw new Error(`Failed to insert batch after ${this.config.maxRetries} attempts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          throw new Error(`Failed to insert batch after ${this.config.maxRetries} attempts: ${message}`);
         }
         
         // Wait before retrying

@@ -34,22 +34,23 @@ model Reading {
   id           BigInt     @id @default(autoincrement())
   entryId      BigInt
   entry        Entry      @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  jyutping     String
-  toneOriginal String     // Extracted from jyutping (e.g., "341" from "zaai3 kyun4 jan4")
-  toneMapped   String     // Mapped using tone conversion (e.g., "403")
-  syllables    Int        // Number of syllables
-  freq         Float      // Frequency score
-  pos          String     // Part of speech (NOUN, ADJ, NUM, LETTER, etc.)
-  register     String     // Register (formal, neutral, colloquial)
-  gloss        String     // English gloss/definition
-  source       String     // Data source (lexicon_v1, words_hk_v28042025, etc.)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  feedback     Feedback[] // Relation to feedback records
 
-  // Indexes for optimal query performance on tone-based searches
-  @@index([toneMapped])
-  @@index([toneMapped, syllables])
+  jyutping      String[]   @default([])
+  tone          String
+  pronunciation String
+  consonants    String[]   @default([])
+  rhymes        String[]   @default([])
+  syllables     Int
+  freq          Float
+  pos           String
+  register      String
+  gloss         String
+  source        String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  feedback      Feedback[]
+
+  @@index([pronunciation])
   @@index([syllables])
   @@index([freq])
   @@map("readings")

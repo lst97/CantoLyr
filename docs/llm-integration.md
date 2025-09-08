@@ -120,6 +120,11 @@ The implementation has been migrated from direct HTTP calls to the official Goog
 - Version info updated to `2.0`
 - Improved error messages and timeout handling
 
+### Model Variants
+
+- For reduced latency and lower rate-limit pressure, you can use `gemini-2.5-flash-lite`.
+- Some tools support automatic fallback to Flash-Lite on rate-limit errors when `enableFallback` is true.
+
 ### Dependencies
 
 The SDK integration requires:

@@ -10,6 +10,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { loadEnvFile } from '../src/infrastructure/config/env.js';
 import { PrismaClient } from '@prisma/client';
 import { normalizeCharlistData, entriesToJSONL as charsToJSONL, type CharlistData } from '../src/shared/utils/charlistNormalizer.js';
 import { normalizeWordslistData, entriesToJSONL as wordsToJSONL, type WordslistData } from '../src/shared/utils/wordslistNormalizer.js';
@@ -28,6 +29,8 @@ async function waitForDbReady(retries = 30, delayMs = 2000) {
 }
 
 async function main() {
+  // Ensure .env vars are loaded when running standalone
+  loadEnvFile();
   console.log('🚀 Bootstrapping database and data...');
 
   const databaseUrl = process.env['DATABASE_URL'];
@@ -106,7 +109,7 @@ async function main() {
 
   // 5) Seed database from normalized files
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
-  const seeder = createDatabaseSeeder(prisma, { batchSize: 1000, logProgress: true });
+  const seeder = createDatabaseSeeder(prisma, { batchSize: 200, logProgress: true });
 
   try {
     await prisma.$connect();

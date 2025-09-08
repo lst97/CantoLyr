@@ -64,6 +64,28 @@ export function getOptionalEnv(key: string, defaultValue: string): string {
 }
 
 /**
+ * Get secret value from environment with stricter handling.
+ * - Does not print secrets.
+ * - Can be marked optional to avoid throwing.
+ */
+export function getSecret(
+  key: string,
+  options: { required?: boolean; allowEmpty?: boolean } = {}
+): string | undefined {
+  const { required = true, allowEmpty = false } = options;
+  const value = process.env[key];
+  if (value === undefined || value === null) {
+    if (required) throw new Error(`Required secret ${key} is not set`);
+    return undefined;
+  }
+  if (!allowEmpty && value.trim() === '') {
+    if (required) throw new Error(`Required secret ${key} is empty`);
+    return undefined;
+  }
+  return value;
+}
+
+/**
  * Get environment variable as number
  */
 export function getEnvAsNumber(key: string, defaultValue: number): number {

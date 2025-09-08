@@ -39,6 +39,7 @@ The system follows hexagonal (ports and adapters) architecture with clear separa
 ### Domain Layer
 
 #### Core Entities
+
 ```typescript
 // Entry: Represents a Cantonese character or vocabulary word
 interface Entry {
@@ -52,9 +53,7 @@ interface Entry {
 // Reading: Pronunciation and tone information for an entry
 interface Reading {
   id: bigint
-  jyutping: string       // e.g., "zaai3 kyun4 jan4"
-  toneOriginal: string   // e.g., "341" extracted from jyutping
-  toneMapped: string     // e.g., "403" using tone mapping
+  jyutping: string[]
   syllables: number      // Number of syllables (3 for "zaai3 kyun4 jan4")
   freq: number           // Frequency score
   pos: string            // Part of speech (NOUN, ADJ, NUM, etc.)
@@ -65,6 +64,7 @@ interface Reading {
 ```
 
 #### Value Objects
+
 ```typescript
 // ToneMap: Validates and encapsulates mapped tone patterns
 class ToneMap {
@@ -75,6 +75,7 @@ class ToneMap {
 ```
 
 #### Domain Services
+
 ```typescript
 // GroupedSelectionService: Orchestrates prefiltering and LLM-based creative selection
 interface Group {
@@ -94,11 +95,13 @@ interface GroupedOption {
 ### Application Layer
 
 #### Use Cases
+
 1. **SearchUseCase**: Handles tone-based search with caching
 2. **ComposeLineUseCase**: Orchestrates heuristic prefiltering and LLM grouped selection for creative word composition
 3. **RecordFeedbackUseCase**: Records user selections for learning
 
 #### Compose Line Workflow (New MVP Approach)
+
 1. **Candidate Retrieval**: Fetch all words matching tone pattern from database
 2. **Heuristic Prefiltering**: Drastically reduce candidates using MVP prefilter:
    - 1-digit tone groups: 70% top-by-frequency + 30% random remainder
@@ -110,6 +113,7 @@ interface GroupedOption {
 ### Infrastructure Ports
 
 #### Repository Interfaces
+
 ```typescript
 interface ReadingRepo {
   searchByToneMapped(query: SearchQuery): Promise<ReadingDTO[]>
@@ -122,6 +126,7 @@ interface WriteRepo {
 ```
 
 #### External Service Interfaces
+
 ```typescript
 interface Cache {
   get<T>(key: string): Promise<T | null>
@@ -145,19 +150,23 @@ interface PrefilterService {
 ### Adapter Implementations
 
 #### Database Adapters
+
 - **PrismaReadingRepository**: Implements ReadingRepo with optimized queries
 - **PrismaWriteRepository**: Implements WriteRepo for feedback storage
 
 #### Cache Adapters
+
 - **InMemoryCache**: MVP implementation with TTL support
 - **RedisCache**: Future implementation for production scaling
 
 #### LLM Adapters
+
 - **GeminiLlmGroupedSelector**: Google Gemini API integration for creative word selection from grouped candidates
 - **DummyLlmGroupedSelector**: Deterministic fallback for testing/development
 - **MvpPrefilterService**: Heuristic candidate reduction using frequency-based and random sampling strategies
 
 #### HTTP Adapters
+
 - **Fastify Routes**: RESTful endpoints with Zod validation
 - **OpenAPI Integration**: Swagger UI for API documentation
 
@@ -188,9 +197,6 @@ model Reading {
   id           BigInt   @id @default(autoincrement())
   entryId      BigInt
   entry        Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  jyutping     String
-  toneOriginal String   // Extracted from jyutping (e.g., "341" from "zaai3 kyun4 jan4")
-  toneMapped   String   // Mapped using tone conversion (e.g., "403")
   syllables    Int      // Number of syllables
   freq         Float    // Frequency score
   pos          String   // Part of speech (NOUN, ADJ, NUM, LETTER, etc.)
@@ -210,9 +216,11 @@ model Reading {
 ### Data Normalization Pipeline
 
 #### JSONL Data Format
+
 The system expects JSONL (JSON Lines) format with the following structure:
 
 **vocab.jsonl** - Vocabulary entries:
+
 ```json
 {
   "surface": "債權人",
@@ -230,6 +238,7 @@ The system expects JSONL (JSON Lines) format with the following structure:
 ```
 
 **chars.jsonl** - Character entries:
+
 ```json
 {
   "surface": "亡",
@@ -247,6 +256,7 @@ The system expects JSONL (JSON Lines) format with the following structure:
 ```
 
 #### Parser Architecture
+
 ```typescript
 interface JsonlParser {
   parseFile(filePath: string): AsyncGenerator<RawEntry>
@@ -272,6 +282,7 @@ interface RawReading {
 ```
 
 #### Normalization Flow
+
 1. **JSONL Parsing**: Stream-process large files line by line
 2. **Schema Validation**: Validate each entry against expected structure
 3. **Tone Extraction**: Parse jyutping to extract tone digits
@@ -283,6 +294,7 @@ interface RawReading {
 ### API Data Transfer Objects
 
 #### Request DTOs (Zod Schemas)
+
 ```typescript
 const SearchQuerySchema = z.object({
   v: z.string().refine(isValidMapped),
@@ -303,6 +315,7 @@ const ComposeRequestSchema = z.object({
 ```
 
 #### Response DTOs
+
 ```typescript
 interface SearchResponse {
   query: string
@@ -327,6 +340,7 @@ interface GroupSelection {
 ## Error Handling
 
 ### Error Classification
+
 1. **Validation Errors**: Invalid input parameters (400)
 2. **Not Found Errors**: Missing resources (404)
 3. **External Service Errors**: LLM API failures (503 with fallback)
@@ -334,6 +348,7 @@ interface GroupSelection {
 5. **Rate Limiting**: API quota exceeded (429)
 
 ### Error Response Format
+
 ```typescript
 interface ErrorResponse {
   error: {
@@ -346,6 +361,7 @@ interface ErrorResponse {
 ```
 
 ### Fallback Strategies
+
 - **LLM Failure**: Graceful degradation to heuristic ranking
 - **Cache Miss**: Direct database query with cache warming
 - **Database Timeout**: Return cached results if available
@@ -355,30 +371,35 @@ interface ErrorResponse {
 ### Test Pyramid Structure
 
 #### Unit Tests (Vitest)
+
 - **Domain Logic**: Tone mapping, validation, score combination
 - **Data Parsers**: Format conversion and normalization
 - **Utilities**: Helper functions and value objects
 - **Coverage Target**: 90%+ for domain and utility code
 
 #### Contract Tests (Vitest + Fastify Inject)
+
 - **API Endpoints**: Request/response validation
 - **Schema Compliance**: OpenAPI specification adherence
 - **Error Scenarios**: Validation and error handling
 - **Performance**: Response time benchmarks
 
 #### End-to-End Tests (Vitest + Test Database)
+
 - **Complete Workflows**: Search → Compose → Feedback cycles
 - **LLM Integration**: Gemini API interaction (with mocks)
 - **Data Pipeline**: JSONL import and processing
 - **Caching Behavior**: Cache hit/miss scenarios
 
 ### Test Data Management
+
 - **Fixtures**: Sample JSONL files for consistent testing
 - **Database Seeding**: Automated test data setup
 - **Mock Services**: LLM and external service mocking
 - **Isolation**: Each test runs with clean state
 
 ### Performance Testing
+
 - **Load Testing**: Concurrent search requests
 - **Cache Performance**: Hit ratio and response times
 - **Database Optimization**: Query performance profiling
@@ -387,6 +408,7 @@ interface ErrorResponse {
 ## Deployment and Configuration
 
 ### Environment Configuration (Zod Validation)
+
 ```typescript
 const ConfigSchema = z.object({
   DATABASE_URL: z.string().url(),
@@ -399,6 +421,7 @@ const ConfigSchema = z.object({
 ```
 
 ### Docker Configuration
+
 - **Multi-stage Build**: Optimized production image
 - **PostgreSQL Service**: Local development database
 - **Health Checks**: Container readiness probes
@@ -407,12 +430,14 @@ const ConfigSchema = z.object({
 ### Observability
 
 #### Logging Strategy (Pino)
+
 - **Request Correlation**: Unique request IDs
 - **Structured Logging**: JSON format for parsing
 - **Performance Metrics**: Response times and cache hits
 - **Error Tracking**: Stack traces and context
 
 #### Monitoring Points
+
 - **API Endpoints**: Response times and error rates
 - **Database**: Query performance and connection pool
 - **Cache**: Hit ratios and memory usage
@@ -421,18 +446,21 @@ const ConfigSchema = z.object({
 ### Future Scalability Considerations
 
 #### Horizontal Scaling
+
 - **Stateless Design**: No server-side session storage
 - **Database Connection Pooling**: Prisma connection management
 - **Cache Distribution**: Redis cluster for shared caching
 - **Load Balancing**: Multiple API instances
 
 #### Performance Optimizations
+
 - **Database Indexing**: Optimized for tone pattern queries
 - **Query Optimization**: Efficient JOIN strategies
 - **Caching Layers**: Multi-level caching (memory + Redis)
 - **CDN Integration**: Static asset delivery
 
 #### Extensibility Points
+
 - **Plugin Architecture**: Additional data parsers
 - **LLM Providers**: Multiple AI service integrations
 - **Export Formats**: Additional output formats

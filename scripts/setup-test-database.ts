@@ -92,23 +92,24 @@ async function setupTestDatabase() {
 
       // Create readings for each jyutping variant
       for (const [jyutping, freq] of Object.entries(jyutpingMap)) {
-        const toneOriginal = extractTones(jyutping);
-        const toneMapped = ToneMap.mapTones(toneOriginal).value;
+        const tone = extractTones(jyutping);
+        const pronunciation = ToneMap.mapTones(tone).value;
         const syllables = jyutping.split(' ').length;
 
         await prisma.reading.create({
+          // Cast to any to support both older client (jyutping: string) and new (string[])
           data: {
             entryId: entry.id,
-            jyutping,
-            toneOriginal,
-            toneMapped,
+            jyutping: jyutping.split(' '),
+            tone,
+            pronunciation,
             syllables,
             freq: freq / 1000, // Normalize frequency
             pos: determinePartOfSpeech(surface, 'char'),
             register: 'neutral',
             gloss: generateGloss(surface, 'char'),
             source: 'test_charlist'
-          }
+          } as any
         });
         
         charReadingCount++;
@@ -139,23 +140,24 @@ async function setupTestDatabase() {
       // Create readings for each jyutping variant
       for (let i = 0; i < jyutpingArray.length; i++) {
         const jyutping = jyutpingArray[i]!;
-        const toneOriginal = extractTones(jyutping);
-        const toneMapped = ToneMap.mapTones(toneOriginal).value;
+        const tone = extractTones(jyutping);
+        const pronunciation = ToneMap.mapTones(tone).value;
         const syllables = jyutping.split(' ').length;
 
         await prisma.reading.create({
+          // Cast to any to support both older client (jyutping: string) and new (string[])
           data: {
             entryId: entry.id,
-            jyutping,
-            toneOriginal,
-            toneMapped,
+            jyutping: jyutping.split(' '),
+            tone,
+            pronunciation,
             syllables,
             freq: (jyutpingArray.length - i) / jyutpingArray.length, // Higher freq for first variants
             pos: determinePartOfSpeech(surface, surface.length === 1 ? 'char' : 'vocab'),
             register: 'colloquial',
             gloss: generateGloss(surface, surface.length === 1 ? 'char' : 'vocab'),
             source: 'test_wordslist'
-          }
+          } as any
         });
         
         wordReadingCount++;

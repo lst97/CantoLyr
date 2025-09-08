@@ -21,6 +21,27 @@ export const SearchQuerySchema = z.object({
 });
 
 /**
+ * Pronunciation search query schema (new mapped tone naming)
+ */
+export const SearchPronunciationQuerySchema = z.object({
+  p: z.string().min(1).refine(isValidMappedTone, {
+    message: 'Invalid pronunciation pattern. Must contain only mapped tone digits (0,3,9,4,5,2) and spaces'
+  }),
+  mode: z.enum(['all', 'vocab', 'char']).optional(),
+  prefix: z.coerce.boolean().optional(),
+  limit: z.coerce.number().int().min(1).max(9999).optional()
+});
+
+/**
+ * Rhyme search query schema
+ */
+export const SearchRhymeQuerySchema = z.object({
+  rhyme: z.string().min(1),
+  mode: z.enum(['all', 'vocab', 'char']).optional(),
+  limit: z.coerce.number().int().min(1).max(9999).optional()
+});
+
+/**
  * Compose line request schema
  */
 export const ComposeRequestSchema = z.object({
@@ -89,9 +110,11 @@ export const ReadingDTOSchema = {
   properties: {
     id: { type: 'string' },
     surface: { type: 'string' },
-    jyutping: { type: 'string' },
-    toneOriginal: { type: 'string' },
-    toneMapped: { type: 'string' },
+    jyutping: { type: 'array', items: { type: 'string' } },
+    tone: { type: 'string' },
+    pronunciation: { type: 'string' },
+    consonants: { type: 'array', items: { type: 'string' } },
+    rhymes: { type: 'array', items: { type: 'string' } },
     syllables: { type: 'integer' },
     freq: { type: 'number' },
     pos: { type: 'string' },
@@ -101,7 +124,7 @@ export const ReadingDTOSchema = {
     type: { type: 'string', enum: ['vocab', 'char'] },
     lang: { type: 'string' }
   },
-  required: ['id', 'surface', 'jyutping', 'toneOriginal', 'toneMapped', 'syllables', 'freq', 'pos', 'register', 'gloss', 'source', 'type', 'lang']
+  required: ['id', 'surface', 'jyutping', 'tone', 'pronunciation', 'consonants', 'rhymes', 'syllables', 'freq', 'pos', 'register', 'gloss', 'source', 'type', 'lang']
 };
 
 /**

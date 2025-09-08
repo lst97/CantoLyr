@@ -1,3 +1,9 @@
+-- Dev reset: drop objects if exist
+DROP TABLE IF EXISTS "public"."feedback" CASCADE;
+DROP TABLE IF EXISTS "public"."readings" CASCADE;
+DROP TABLE IF EXISTS "public"."entries" CASCADE;
+DROP TYPE IF EXISTS "public"."EntryType";
+
 -- CreateEnum
 CREATE TYPE "public"."EntryType" AS ENUM ('vocab', 'char');
 
@@ -17,9 +23,11 @@ CREATE TABLE "public"."entries" (
 CREATE TABLE "public"."readings" (
     "id" BIGSERIAL NOT NULL,
     "entryId" BIGINT NOT NULL,
-    "jyutping" TEXT NOT NULL,
-    "toneOriginal" TEXT NOT NULL,
-    "toneMapped" TEXT NOT NULL,
+    "jyutping" TEXT[] DEFAULT '{}',
+    "tone" TEXT NOT NULL,
+    "pronunciation" TEXT NOT NULL,
+    "consonants" TEXT[] DEFAULT '{}',
+    "rhymes" TEXT[] DEFAULT '{}',
     "syllables" INTEGER NOT NULL,
     "freq" DOUBLE PRECISION NOT NULL,
     "pos" TEXT NOT NULL,
@@ -51,10 +59,10 @@ CREATE INDEX "entries_type_surface_idx" ON "public"."entries"("type", "surface")
 CREATE INDEX "entries_lang_type_idx" ON "public"."entries"("lang", "type");
 
 -- CreateIndex
-CREATE INDEX "readings_toneMapped_idx" ON "public"."readings"("toneMapped");
-
--- CreateIndex
-CREATE INDEX "readings_toneMapped_syllables_idx" ON "public"."readings"("toneMapped", "syllables");
+CREATE INDEX "readings_pronunciation_idx" ON "public"."readings"("pronunciation");
+-- GIN indexes for array containment searches (rhyme/initial lookups)
+CREATE INDEX "readings_rhymes_gin_idx" ON "public"."readings" USING GIN ("rhymes");
+CREATE INDEX "readings_consonants_gin_idx" ON "public"."readings" USING GIN ("consonants");
 
 -- CreateIndex
 CREATE INDEX "readings_syllables_idx" ON "public"."readings"("syllables");

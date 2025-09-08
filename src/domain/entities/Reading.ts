@@ -1,5 +1,3 @@
-import { ToneMap } from '../value-objects/ToneMap.js';
-import { extractTones, countSyllables, normalizeJyutping } from '../../shared/utils/jyutping.js';
 import type { PartOfSpeech, Register } from '../../shared/types/common.js';
 
 /**
@@ -8,9 +6,11 @@ import type { PartOfSpeech, Register } from '../../shared/types/common.js';
 export class Reading {
   readonly id: bigint;
   readonly entryId: bigint;
-  readonly jyutping: string;
-  readonly toneOriginal: string;
-  readonly toneMapped: ToneMap;
+  readonly jyutping: string[];
+  readonly tone: string;
+  readonly pronunciation: string;
+  readonly consonants: string[];
+  readonly rhymes: string[];
   readonly syllables: number;
   readonly freq: number;
   readonly pos: PartOfSpeech;
@@ -23,7 +23,12 @@ export class Reading {
   constructor(params: {
     id: bigint;
     entryId: bigint;
-    jyutping: string;
+    jyutping: string[];
+    tone: string;
+    pronunciation: string;
+    consonants: string[];
+    rhymes: string[];
+    syllables: number;
     freq: number;
     pos: PartOfSpeech;
     register: Register;
@@ -32,13 +37,6 @@ export class Reading {
     createdAt?: Date;
     updatedAt?: Date;
   }) {
-    // Validate and normalize jyutping
-    const normalizedJyutping = normalizeJyutping(params.jyutping);
-    
-    // Extract tone information
-    const toneOriginal = extractTones(normalizedJyutping);
-    const syllables = countSyllables(normalizedJyutping);
-
     // Validate frequency
     if (params.freq < 0) {
       throw new Error('Frequency must be non-negative');
@@ -56,10 +54,12 @@ export class Reading {
 
     this.id = params.id;
     this.entryId = params.entryId;
-    this.jyutping = normalizedJyutping;
-    this.toneOriginal = toneOriginal;
-    this.toneMapped = ToneMap.mapTones(toneOriginal);
-    this.syllables = syllables;
+    this.jyutping = params.jyutping;
+    this.tone = params.tone;
+    this.pronunciation = params.pronunciation;
+    this.consonants = params.consonants;
+    this.rhymes = params.rhymes;
+    this.syllables = params.syllables;
     this.freq = params.freq;
     this.pos = params.pos;
     this.register = params.register;
@@ -74,9 +74,9 @@ export class Reading {
    */
   matchesTonePattern(pattern: string, isPrefix: boolean = false): boolean {
     if (isPrefix) {
-      return this.toneMapped.startsWith(pattern);
+      return this.pronunciation.startsWith(pattern);
     }
-    return this.toneMapped.value === pattern;
+    return this.pronunciation === pattern;
   }
 
   /**
@@ -84,7 +84,7 @@ export class Reading {
    */
   getDisplayInfo(): {
     surface: string;
-    jyutping: string;
+    jyutping: string[];
     tones: string;
     syllables: number;
     pos: string;
@@ -93,7 +93,7 @@ export class Reading {
     return {
       surface: '', // Will be filled by Entry
       jyutping: this.jyutping,
-      tones: this.toneMapped.value,
+      tones: this.pronunciation,
       syllables: this.syllables,
       pos: this.pos,
       gloss: this.gloss
@@ -106,7 +106,12 @@ export class Reading {
   static fromRawData(params: {
     id: bigint;
     entryId: bigint;
-    jyutping: string;
+    jyutping: string[];
+    tone: string;
+    pronunciation: string;
+    consonants: string[];
+    rhymes: string[];
+    syllables: number;
     freq: number;
     pos: string;
     register: string;
@@ -130,14 +135,9 @@ export class Reading {
       : 'neutral';
 
     return new Reading({
-      id: params.id,
-      entryId: params.entryId,
-      jyutping: params.jyutping,
-      freq: params.freq,
-      pos,
-      register,
-      gloss: params.gloss,
-      source: params.source
+        ...params,
+        pos,
+        register,
     });
   }
 }

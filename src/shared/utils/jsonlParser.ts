@@ -21,7 +21,14 @@ import type { PartOfSpeech, Register } from '../types/common.js';
  * Zod schema for validating raw JSONL entries
  */
 const RawReadingSchema = z.object({
-  jyutping: z.string().min(1),
+  // Accept string or array form for jyutping
+  jyutping: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
+  // New optional fields from updated normalizers
+  tone: z.string().optional(),
+  pronunciation: z.string().optional(),
+  consonants: z.array(z.string()).optional(),
+  rhymes: z.array(z.string()).optional(),
+  // Existing fields
   freq: z.number(),
   pos: z.string(),
   register: z.string(),
@@ -158,20 +165,26 @@ export class JsonlParser {
    * @throws Error if normalization fails
    */
   private normalizeReading(rawReading: RawReading): NormalizedReading {
-    // Normalize jyutping
-    const jyutping = normalizeJyutping(rawReading.jyutping);
+    // Normalize jyutping (accept array or string)
+    const jpInput = Array.isArray(rawReading.jyutping)
+      ? rawReading.jyutping.join(' ').trim()
+      : rawReading.jyutping;
+    const jyutping = normalizeJyutping(jpInput);
     
     // Validate jyutping
     if (!isValidJyutping(jyutping)) {
       throw new Error(`Invalid jyutping: "${jyutping}"`);
     }
     
-    // Extract original tones
-    const toneOriginal = extractTones(jyutping);
+    // Determine original tones: prefer provided 'tone' else extract
+    const tone = rawReading.tone && rawReading.tone.trim().length > 0
+      ? rawReading.tone.trim()
+      : extractTones(jyutping);
     
     // Map tones
-    const toneMap = ToneMap.mapTones(toneOriginal);
-    const toneMapped = toneMap.value;
+    const pronunciation = rawReading.pronunciation && rawReading.pronunciation.trim().length > 0
+      ? rawReading.pronunciation.trim()
+      : ToneMap.mapTones(tone).value;
     
     // Count syllables
     const syllables = countSyllables(jyutping);
@@ -182,17 +195,33 @@ export class JsonlParser {
     // Normalize register
     const register = this.normalizeRegister(rawReading.register);
     
-    return {
-      jyutping,
-      toneOriginal,
-      toneMapped,
+    // If raw provides array tokens or decomposition, include them
+    const jyutpingTokens = Array.isArray(rawReading.jyutping)
+      ? rawReading.jyutping.map((s) => normalizeJyutping(s))
+      : jyutping.split(/\s+/);
+    const consonants = rawReading.consonants && Array.isArray(rawReading.consonants) ? rawReading.consonants : undefined;
+    const rhymes = rawReading.rhymes && Array.isArray(rawReading.rhymes) ? rawReading.rhymes : undefined;
+
+    const reading: NormalizedReading = {
+      jyutping: jyutpingTokens,
+      tone,
+      pronunciation,
       syllables,
       freq: rawReading.freq,
       pos,
       register,
       gloss: rawReading.gloss.trim(),
-      source: rawReading.source.trim()
+      source: rawReading.source.trim(),
     };
+
+    if (consonants) {
+      reading.consonants = consonants;
+    }
+    if (rhymes) {
+      reading.rhymes = rhymes;
+    }
+
+    return reading;
   }
 
   /**

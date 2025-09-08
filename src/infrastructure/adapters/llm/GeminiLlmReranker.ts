@@ -1,37 +1,35 @@
 // TODO: need to imporve the prefilter
 
 import type {
-  LlmReranker,
-  RerankInput,
-  RerankResult,
-  LlmConfig,
-  RankingItem,
+	LlmReranker,
+	RerankInput,
+	RerankResult,
+	LlmConfig,
+	RankingItem,
 } from "../../../application/ports/LlmReranker.js";
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from "@google/genai";
 import Ajv, { ValidateFunction } from "ajv";
-
-
 
 /**
  * Expected JSON structure from Gemini for rankings
  */
 const rankingResponseSchema = {
-  type: "object",
-  properties: {
-    rankings: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          readingId: { type: "string" },
-          score: { type: "number" }, // Allow any number, we'll clamp it later
-          reason: { type: "string" },
-        },
-        required: ["readingId", "score"],
-      },
-    },
-  },
-  required: ["rankings"],
+	type: "object",
+	properties: {
+		rankings: {
+			type: "array",
+			items: {
+				type: "object",
+				properties: {
+					readingId: { type: "string" },
+					score: { type: "number" }, // Allow any number, we'll clamp it later
+					reason: { type: "string" },
+				},
+				required: ["readingId", "score"],
+			},
+		},
+	},
+	required: ["rankings"],
 };
 
 /**
@@ -39,107 +37,107 @@ const rankingResponseSchema = {
  * Provides intelligent reranking of Cantonese readings based on context and constraints
  */
 export class GeminiLlmReranker implements LlmReranker {
-  private readonly ajv: Ajv;
-  private readonly validateRankingResponse: ValidateFunction;
-  private readonly genAI: GoogleGenAI;
+	private readonly ajv: Ajv;
+	private readonly validateRankingResponse: ValidateFunction;
+	private readonly genAI: GoogleGenAI;
 
-  constructor(private readonly config: LlmConfig) {
-    this.ajv = new Ajv();
-    this.validateRankingResponse = this.ajv.compile(rankingResponseSchema);
-    this.genAI = new GoogleGenAI({ apiKey: config.apiKey! });
-  }
+	constructor(private readonly config: LlmConfig) {
+		this.ajv = new Ajv();
+		this.validateRankingResponse = this.ajv.compile(rankingResponseSchema);
+		this.genAI = new GoogleGenAI({ apiKey: config.apiKey! });
+	}
 
-  async rerank(input: RerankInput): Promise<RerankResult> {
-    const startTime = Date.now();
+	async rerank(input: RerankInput): Promise<RerankResult> {
+		const startTime = Date.now();
 
-    try {
-      await this.validateConfig();
+		try {
+			await this.validateConfig();
 
-      const prompt = this.buildPrompt(input);
-      const response = await this.generateContent(prompt) as any;
+			const prompt = this.buildPrompt(input);
+			const response = (await this.generateContent(prompt)) as any;
 
-      const text = this.extractText(response);
-      if (!text) {
-        throw new Error("No text content in Gemini response");
-      }
+			const text = this.extractText(response);
+			if (!text) {
+				throw new Error("No text content in Gemini response");
+			}
 
-      const rankings = this.parseRankings(
-        text,
-        input.candidates.map((c) => c.id)
-      );
-      const processingTimeMs = Date.now() - startTime;
+			const rankings = this.parseRankings(
+				text,
+				input.candidates.map((c) => c.id)
+			);
+			const processingTimeMs = Date.now() - startTime;
 
-      return {
-        rankings,
-        success: true,
-        model: this.config.model || "gemini-2.5-flash",
-        processingTimeMs,
-      };
-    } catch (error) {
-      const processingTimeMs = Date.now() - startTime;
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+			return {
+				rankings,
+				success: true,
+				model: this.config.model || "gemini-2.5-flash",
+				processingTimeMs,
+			};
+		} catch (error) {
+			const processingTimeMs = Date.now() - startTime;
+			const errorMessage =
+				error instanceof Error ? error.message : "Unknown error";
 
-      return {
-        rankings: [],
-        success: false,
-        error: errorMessage,
-        model: this.config.model || "gemini-2.5-flash",
-        processingTimeMs,
-      };
-    }
-  }
+			return {
+				rankings: [],
+				success: false,
+				error: errorMessage,
+				model: this.config.model || "gemini-2.5-flash",
+				processingTimeMs,
+			};
+		}
+	}
 
-  async isAvailable(): Promise<boolean> {
-    try {
-      await this.validateConfig();
-      return true;
-    } catch {
-      return false;
-    }
-  }
+	async isAvailable(): Promise<boolean> {
+		try {
+			await this.validateConfig();
+			return true;
+		} catch {
+			return false;
+		}
+	}
 
-  getInfo() {
-    return {
-      provider: "Google Gemini",
-      model: this.config.model || "gemini-2.5-flash",
-      version: "2.0",
-    };
-  }
+	getInfo() {
+		return {
+			provider: "Google Gemini",
+			model: this.config.model || "gemini-2.5-flash",
+			version: "2.0",
+		};
+	}
 
-  async validateConfig(): Promise<void> {
-    if (!this.config.apiKey) {
-      throw new Error("Gemini API key is required");
-    }
+	async validateConfig(): Promise<void> {
+		if (!this.config.apiKey) {
+			throw new Error("Gemini API key is required");
+		}
 
-    if (this.config.timeoutMs && this.config.timeoutMs <= 0) {
-      throw new Error("Timeout must be positive");
-    }
+		if (this.config.timeoutMs && this.config.timeoutMs <= 0) {
+			throw new Error("Timeout must be positive");
+		}
 
-    if (this.config.maxRetries && this.config.maxRetries < 0) {
-      throw new Error("Max retries cannot be negative");
-    }
-  }
+		if (this.config.maxRetries && this.config.maxRetries < 0) {
+			throw new Error("Max retries cannot be negative");
+		}
+	}
 
-  private buildPrompt(input: RerankInput): string {
-    const candidatesText = input.candidates
-      .map(
-        (c, idx) =>
-          `${idx + 1}. ID: ${c.id}, Surface: "${c.surface}", Jyutping: "${
-            c.jyutping
-          }", Gloss: "${c.gloss}", POS: ${c.pos}, Register: ${c.register}`
-      )
-      .join("\n");
+	private buildPrompt(input: RerankInput): string {
+		const candidatesText = input.candidates
+			.map(
+				(c, idx) =>
+					`${idx + 1}. ID: ${c.id}, Surface: "${c.surface}", Jyutping: "${
+						c.jyutping
+					}", Gloss: "${c.gloss}", POS: ${c.pos}, Register: ${c.register}`
+			)
+			.join("\n");
 
-    const constraintsText = input.constraints
-      ? `\nConstraints: ${JSON.stringify(input.constraints)}`
-      : "";
+		const constraintsText = input.constraints
+			? `\nConstraints: ${JSON.stringify(input.constraints)}`
+			: "";
 
-    const contextText = input.context
-      ? `\nContext: ${JSON.stringify(input.context)}`
-      : "";
+		const contextText = input.context
+			? `\nContext: ${JSON.stringify(input.context)}`
+			: "";
 
-    return `You are helping compose Cantonese lyrics. Please rank the following Cantonese characters/words for the tone pattern "${input.tonePattern}".
+		return `You are helping compose Cantonese lyrics. Please rank the following Cantonese characters/words for the tone pattern "${input.tonePattern}".
 
 Consider:
 1. Semantic appropriateness for lyrical composition
@@ -163,154 +161,171 @@ Example format:
     {"readingId": "456", "score": 0.7, "reason": "Good semantic fit"}
   ]
 }`;
-  }
+	}
 
-  private async generateContent(prompt: string) {
-    const model = this.config.model || "gemini-2.5-flash";
-    
-    // Create a timeout promise if timeout is configured
-    const timeoutMs = this.config.timeoutMs || 600000;
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Gemini API request timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-    });
+	private async generateContent(prompt: string) {
+		const model = this.config.model || "gemini-2.5-flash";
 
-    // Create the generation promise
-    const generationPromise = this.genAI.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        temperature: 0.3,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 20480,
-        responseModalities: ['TEXT'],
-        // Ask SDK to treat output as JSON and help enforce structure
-        responseMimeType: 'application/json',
-        responseJsonSchema: rankingResponseSchema,
-      },
-    });
+		// Create a timeout promise if timeout is configured
+		const timeoutMs = this.config.timeoutMs || 600000;
+		const timeoutPromise = new Promise((_, reject) => {
+			setTimeout(() => {
+				reject(new Error(`Gemini API request timed out after ${timeoutMs}ms`));
+			}, timeoutMs);
+		});
 
-    // Race between generation and timeout
-    return Promise.race([generationPromise, timeoutPromise]);
-  }
+		// Create the generation promise
+		const generationPromise = this.genAI.models.generateContent({
+			model,
+			contents: prompt,
+			config: {
+				temperature: 0.3,
+				topK: 40,
+				topP: 0.95,
+				maxOutputTokens: 20480,
+				responseModalities: ["TEXT"],
+				// Ask SDK to treat output as JSON and help enforce structure
+				responseMimeType: "application/json",
+				responseJsonSchema: rankingResponseSchema,
+			},
+		});
 
-  /**
-   * Extract plain text from various possible Google GenAI SDK response shapes.
-   * Supports both mocked `.text` property and real SDK `.response.text()` forms.
-   */
-  private extractText(response: any): string | undefined {
-    try {
-      if (!response) return undefined;
-      // Unit test mock shape: { text: string }
-      if (typeof response.text === 'string' && response.text.trim().length > 0) {
-        return response.text as string;
-      }
+		// Race between generation and timeout
+		return Promise.race([generationPromise, timeoutPromise]);
+	}
 
-      // Some SDKs expose combined inline data (e.g., JSON) via data accessor
-      if (typeof response.data === 'string' && response.data.trim().length > 0) {
-        return response.data as string;
-      }
+	/**
+	 * Extract plain text from various possible Google GenAI SDK response shapes.
+	 * Supports both mocked `.text` property and real SDK `.response.text()` forms.
+	 */
+	private extractText(response: any): string | undefined {
+		try {
+			if (!response) return undefined;
+			// Unit test mock shape: { text: string }
+			if (
+				typeof response.text === "string" &&
+				response.text.trim().length > 0
+			) {
+				return response.text as string;
+			}
 
-      // Official SDK result shape often: { response: { text(): string, candidates: [...] } }
-      const maybeResp = response.response ?? response;
-      if (maybeResp && typeof maybeResp.text === 'function') {
-        const t = maybeResp.text();
-        if (typeof t === 'string' && t.trim().length > 0) return t;
-      }
+			// Some SDKs expose combined inline data (e.g., JSON) via data accessor
+			if (
+				typeof response.data === "string" &&
+				response.data.trim().length > 0
+			) {
+				return response.data as string;
+			}
 
-      if (typeof maybeResp?.data === 'string' && maybeResp.data.trim().length > 0) {
-        return maybeResp.data as string;
-      }
+			// Official SDK result shape often: { response: { text(): string, candidates: [...] } }
+			const maybeResp = response.response ?? response;
+			if (maybeResp && typeof maybeResp.text === "function") {
+				const t = maybeResp.text();
+				if (typeof t === "string" && t.trim().length > 0) return t;
+			}
 
-      // Fall back to digging into candidates/parts
-      const candidates = maybeResp?.candidates ?? response?.candidates;
-      if (Array.isArray(candidates) && candidates.length > 0) {
-        for (const c of candidates) {
-          const contentItems = c?.content
-            ? (Array.isArray(c.content) ? c.content : [c.content])
-            : [];
+			if (
+				typeof maybeResp?.data === "string" &&
+				maybeResp.data.trim().length > 0
+			) {
+				return maybeResp.data as string;
+			}
 
-          for (const content of contentItems) {
-            const parts = content?.parts ?? c?.parts ?? [];
-            if (Array.isArray(parts) && parts.length) {
-              // Prefer explicit text parts
-              for (const p of parts) {
-                if (typeof p?.text === 'string' && p.text.trim().length > 0) {
-                  return p.text as string;
-                }
-              }
-              // Try inlineData/base64 JSON parts
-              for (const p of parts) {
-                const inline = p?.inlineData ?? p?.inline_data;
-                const b64 = inline?.data ?? inline?.bytes ?? inline?.b64;
-                if (typeof b64 === 'string' && b64.length > 0) {
-                  try {
-                    const decoded = Buffer.from(b64, 'base64').toString('utf8');
-                    if (decoded.trim().length > 0) return decoded;
-                  } catch {}
-                }
-              }
-            }
-          }
-          // Some candidates might expose text directly
-          if (typeof c?.content?.text === 'string' && c.content.text.trim().length > 0) {
-            return c.content.text as string;
-          }
-          if (typeof c?.text === 'string' && c.text.trim().length > 0) {
-            return c.text as string;
-          }
-        }
-      }
+			// Fall back to digging into candidates/parts
+			const candidates = maybeResp?.candidates ?? response?.candidates;
+			if (Array.isArray(candidates) && candidates.length > 0) {
+				for (const c of candidates) {
+					const contentItems = c?.content
+						? Array.isArray(c.content)
+							? c.content
+							: [c.content]
+						: [];
 
-      // Some SDKs expose `output_text`
-      if (typeof maybeResp?.output_text === 'string' && maybeResp.output_text.trim().length > 0) {
-        return maybeResp.output_text as string;
-      }
+					for (const content of contentItems) {
+						const parts = content?.parts ?? c?.parts ?? [];
+						if (Array.isArray(parts) && parts.length) {
+							// Prefer explicit text parts
+							for (const p of parts) {
+								if (typeof p?.text === "string" && p.text.trim().length > 0) {
+									return p.text as string;
+								}
+							}
+							// Try inlineData/base64 JSON parts
+							for (const p of parts) {
+								const inline = p?.inlineData ?? p?.inline_data;
+								const b64 = inline?.data ?? inline?.bytes ?? inline?.b64;
+								if (typeof b64 === "string" && b64.length > 0) {
+									try {
+										const decoded = Buffer.from(b64, "base64").toString("utf8");
+										if (decoded.trim().length > 0) return decoded;
+									} catch {}
+								}
+							}
+						}
+					}
+					// Some candidates might expose text directly
+					if (
+						typeof c?.content?.text === "string" &&
+						c.content.text.trim().length > 0
+					) {
+						return c.content.text as string;
+					}
+					if (typeof c?.text === "string" && c.text.trim().length > 0) {
+						return c.text as string;
+					}
+				}
+			}
 
-      return undefined;
-    } catch {
-      return undefined;
-    }
-  }
+			// Some SDKs expose `output_text`
+			if (
+				typeof maybeResp?.output_text === "string" &&
+				maybeResp.output_text.trim().length > 0
+			) {
+				return maybeResp.output_text as string;
+			}
 
-  private parseRankings(
-    textContent: string,
-    validIds: bigint[]
-  ): RankingItem[] {
-    try {
-      // Try to extract JSON from the response
-      const jsonMatch = textContent.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("No JSON found in Gemini response");
-      }
+			return undefined;
+		} catch {
+			return undefined;
+		}
+	}
 
-      const parsed: any = JSON.parse(jsonMatch[0]);
+	private parseRankings(
+		textContent: string,
+		validIds: bigint[]
+	): RankingItem[] {
+		try {
+			// Try to extract JSON from the response
+			const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+			if (!jsonMatch) {
+				throw new Error("No JSON found in Gemini response");
+			}
 
-      if (!this.validateRankingResponse(parsed)) {
-        throw new Error(
-          `Invalid ranking response format: ${this.ajv.errorsText(
-            this.validateRankingResponse.errors
-          )}`
-        );
-      }
+			const parsed: any = JSON.parse(jsonMatch[0]);
 
-      const validIdStrings = new Set(validIds.map((id) => id.toString()));
+			if (!this.validateRankingResponse(parsed)) {
+				throw new Error(
+					`Invalid ranking response format: ${this.ajv.errorsText(
+						this.validateRankingResponse.errors
+					)}`
+				);
+			}
 
-      return (parsed as any).rankings
-        .filter((item: any) => validIdStrings.has(item.readingId))
-        .map((item: any) => ({
-          readingId: BigInt(item.readingId),
-          score: Math.max(0, Math.min(1, item.score)), // Clamp to [0, 1]
-          reason: item.reason,
-        }));
-    } catch (error) {
-      throw new Error(
-        `Failed to parse Gemini rankings: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
-  }
+			const validIdStrings = new Set(validIds.map((id) => id.toString()));
+
+			return (parsed as any).rankings
+				.filter((item: any) => validIdStrings.has(item.readingId))
+				.map((item: any) => ({
+					readingId: BigInt(item.readingId),
+					score: Math.max(0, Math.min(1, item.score)), // Clamp to [0, 1]
+					reason: item.reason,
+				}));
+		} catch (error) {
+			throw new Error(
+				`Failed to parse Gemini rankings: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
+			);
+		}
+	}
 }

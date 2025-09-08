@@ -46,7 +46,12 @@ LLM_PROVIDER=dummy
 # Use 'gemini' for production (requires API key)
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_api_key_here
+# Default: gemini-2.5-flash. To reduce rate limits, you can use Flash-Lite
+# e.g. LLM_MODEL=gemini-2.5-flash-lite
 LLM_MODEL=gemini-2.5-flash
+# Optional: enable automatic fallback to Flash-Lite on rate limit (default true)
+LLM_ENABLE_FALLBACK=true
+LLM_MAX_RETRIES=2
 ```
 
 #### Cache

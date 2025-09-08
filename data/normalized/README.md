@@ -19,8 +19,6 @@ Top‑level fields (per line):
   - `en`, `misc`: Other/uncategorized.
 - `readings`: Array of pronunciations/readings with:
   - `jyutping`: Canonicalized Jyutping.
-  - `toneOriginal`: Original tone string extracted from the Jyutping.
-  - `toneMapped`: Mapped tone string via tone normalization.
   - `syllables`: Number of syllables in the reading.
   - `freq`: Frequency per million (ppm). See Frequency Sources below.
   - `pos`: Part‑of‑speech label (uppercased when sourced from sentiment dictionary).

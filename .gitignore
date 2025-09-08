@@ -67,3 +67,6 @@ prisma/migrations/
 
 # Crawler
 /.state/
+
+# Chroma
+.cache/
