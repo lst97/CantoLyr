@@ -1,83 +1,55 @@
 import { GoogleGenAI } from "@google/genai";
-import Ajv, { ValidateFunction } from "ajv";
+import { z } from "zod";
 import type {
 	LyricsAnnotator,
 	LyricsAnnotatorConfig,
 	LyricsAnnotatorInput,
 	LyricsAnnotatorOutput,
-} from "../../../application/ports/LyricsAnnotator.js";
+} from "../../../application/ports/LyricsAnnotator.ts";
 
-const annotationSchema = {
-	type: "object",
-	properties: {
-		songGenre: { type: "array", items: { type: "string" } },
-		lines: {
-			type: "array",
-			items: {
-				type: "object",
-				properties: {
-					id: { type: "string" },
-					semantics: {
-						type: "object",
-						properties: {
-							themes: { type: "array", items: { type: "string" } },
-							sentiment: {
-								type: "string",
-								enum: [
-									"VERY_NEGATIVE",
-									"NEGATIVE",
-									"NEUTRAL",
-									"POSITIVE",
-									"VERY_POSITIVE",
-								],
-							},
-							keywords: { type: "array", items: { type: "string" } },
-						},
-						required: ["themes", "sentiment", "keywords"],
-					},
-					tokens: {
-						type: "array",
-						items: {
-							type: "object",
-							properties: {
-								text: { type: "string" },
-								pos: { type: "string" },
-							},
-							required: ["text", "pos"],
-						},
-					},
-					syntax_notes: { type: "string", minLength: 1 },
-				},
-				required: ["id", "semantics", "syntax_notes"],
-			},
-		},
-	},
-	required: ["songGenre", "lines"],
-} as const;
+const annotationSchema = z.object({
+	songGenre: z.array(z.string()),
+	lines: z.array(
+		z.object({
+			id: z.string(),
+			semantics: z.object({
+				themes: z.array(z.string()),
+				sentiment: z.enum([
+					"VERY_NEGATIVE",
+					"NEGATIVE",
+					"NEUTRAL",
+					"POSITIVE",
+					"VERY_POSITIVE",
+				]),
+				keywords: z.array(z.string()),
+			}),
+			tokens: z.array(z.object({ text: z.string(), pos: z.string() })),
+			syntax_notes: z.string().min(1),
+		})
+	),
+});
 
 export class GeminiLyricsAnnotator implements LyricsAnnotator {
-	private readonly ajv: Ajv;
-	private readonly validateResponse: ValidateFunction;
 	private readonly genAI: GoogleGenAI;
 
 	constructor(private readonly config: LyricsAnnotatorConfig) {
-		this.ajv = new Ajv();
-		this.validateResponse = this.ajv.compile(annotationSchema);
 		// Use a shallow wrapper schema to avoid nesting depth limits.
 		// The model returns: [{ songId: string, result: { songGenre, lines[...] } }]
 		this.genAI = new GoogleGenAI({ apiKey: config.apiKey! });
 	}
 
-	async validateConfig(): Promise<void> {
+	validateConfig(): void {
 		if (!this.config.apiKey) throw new Error("Gemini API key is required");
-		if (this.config.timeoutMs && this.config.timeoutMs <= 0)
+		if (this.config.timeoutMs && this.config.timeoutMs <= 0) {
 			throw new Error("Timeout must be positive");
-		if (this.config.maxRetries && this.config.maxRetries < 0)
+		}
+		if (this.config.maxRetries && this.config.maxRetries < 0) {
 			throw new Error("Max retries cannot be negative");
+		}
 	}
 
 	async annotate(input: LyricsAnnotatorInput): Promise<LyricsAnnotatorOutput> {
-		await this.validateConfig();
+		this.validateConfig();
 
 		const prompt = this.buildPrompt(input);
 
@@ -94,14 +66,13 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
 				if (!match) throw new Error("No JSON found in Gemini response");
 
 				const parsed = JSON.parse(match[0]);
-				if (!this.validateResponse(parsed)) {
+				const validation = annotationSchema.safeParse(parsed);
+				if (!validation.success) {
 					throw new Error(
-						`Invalid annotation response: ${this.ajv.errorsText(
-							this.validateResponse.errors
-						)}`
+						`Invalid annotation response: ${validation.error.message}`
 					);
 				}
-				return parsed as LyricsAnnotatorOutput;
+				return validation.data as LyricsAnnotatorOutput;
 			} catch (err) {
 				lastErr = err;
 				// Optional fallback: on rate limit, switch to a lighter model for remaining retries
@@ -186,7 +157,7 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
 		].join("\n");
 	}
 
-	private async generateContent(prompt: string, model?: string) {
+	private generateContent(prompt: string, model?: string) {
 		const modelToUse = model || this.config.model || "gemini-2.5-flash";
 		const timeoutMs = this.config.timeoutMs || 600000;
 
@@ -229,8 +200,9 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
 			const msg = (err?.message || "").toString().toLowerCase();
 			if (code === "429") return true;
 			if (msg.includes("rate") && msg.includes("limit")) return true;
-			if (msg.includes("quota") || msg.includes("resource_exhausted"))
+			if (msg.includes("quota") || msg.includes("resource_exhausted")) {
 				return true;
+			}
 			return false;
 		} catch {
 			return false;
@@ -241,8 +213,9 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
 		// Prefer explicit Flash-Lite when possible
 		if (/flash-lite/i.test(current)) return current;
 		// Common 2.5 Flash -> 2.5 Flash-Lite
-		if (/gemini-2\.5-flash(-\w+)?/i.test(current))
+		if (/gemini-2\.5-flash(-\w+)?/i.test(current)) {
 			return "gemini-2.5-flash-lite";
+		}
 		// Generic 2.5 -> 2.5 Flash-Lite
 		if (/gemini-2\.5/i.test(current)) return "gemini-2.5-flash-lite";
 		// Fallback default
@@ -252,8 +225,9 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
 	private extractText(response: any): string | undefined {
 		try {
 			if (!response) return undefined;
-			if (typeof response.text === "string" && response.text.trim())
+			if (typeof response.text === "string" && response.text.trim()) {
 				return response.text;
+			}
 
 			const maybeResp = response.response ?? response;
 			if (maybeResp && typeof maybeResp.text === "function") {
@@ -284,8 +258,9 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
 			if (
 				typeof maybeResp?.output_text === "string" &&
 				maybeResp.output_text.trim()
-			)
+			) {
 				return maybeResp.output_text;
+			}
 			return undefined;
 		} catch {
 			return undefined;

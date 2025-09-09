@@ -1,4 +1,4 @@
-import type { ReadingDTO } from './ReadingRepo.js';
+import type { ReadingDTO } from "./ReadingRepo.ts";
 
 /**
  * Input for LLM reranking operation

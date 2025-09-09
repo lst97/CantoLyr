@@ -217,7 +217,7 @@ def main():
     ensure_hf_token()
 
     input_path = sys.argv[1] if len(sys.argv) > 1 else get_env("INPUT", "data/vector/chroma-all.jsonl")
-    collection_name = sys.argv[2] if len(sys.argv) > 2 else get_env("CHROMA_COLLECTION", "cantolyr_lexicon_v1_768")
+    collection_name = sys.argv[2] if len(sys.argv) > 2 else get_env("CHROMA_COLLECTION", "cantolyr_lexicon_v1_1024")
     chroma_url = get_env("CHROMA_URL", "http://localhost:8000")
 
     embed_model_id = get_env("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")

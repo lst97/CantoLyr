@@ -1,4 +1,4 @@
-import type { PartOfSpeech, Register } from '../../shared/types/common.js';
+import type { PartOfSpeech, Register } from "../../shared/types/common.ts";
 
 /**
  * Reading entity represents pronunciation and tone information for an entry
@@ -39,17 +39,17 @@ export class Reading {
   }) {
     // Validate frequency
     if (params.freq < 0) {
-      throw new Error('Frequency must be non-negative');
+      throw new Error("Frequency must be non-negative");
     }
 
     // Validate gloss
     if (!params.gloss || params.gloss.trim().length === 0) {
-      throw new Error('Gloss cannot be empty');
+      throw new Error("Gloss cannot be empty");
     }
 
     // Validate source
     if (!params.source || params.source.trim().length === 0) {
-      throw new Error('Source cannot be empty');
+      throw new Error("Source cannot be empty");
     }
 
     this.id = params.id;
@@ -91,12 +91,12 @@ export class Reading {
     gloss: string;
   } {
     return {
-      surface: '', // Will be filled by Entry
+      surface: "", // Will be filled by Entry
       jyutping: this.jyutping,
       tones: this.pronunciation,
       syllables: this.syllables,
       pos: this.pos,
-      gloss: this.gloss
+      gloss: this.gloss,
     };
   }
 
@@ -121,23 +121,34 @@ export class Reading {
     // Normalize and validate POS
     const normalizedPos = params.pos.toUpperCase() as PartOfSpeech;
     const validPos: PartOfSpeech[] = [
-      'NOUN', 'ADJ', 'NUM', 'LETTER', 'VERB', 'ADV', 
-      'PREP', 'CONJ', 'INTJ', 'PRON', 'DET', 'PART', 'UNKNOWN'
+      "NOUN",
+      "ADJ",
+      "NUM",
+      "LETTER",
+      "VERB",
+      "ADV",
+      "PREP",
+      "CONJ",
+      "INTJ",
+      "PRON",
+      "DET",
+      "PART",
+      "UNKNOWN",
     ];
-    
-    const pos = validPos.includes(normalizedPos) ? normalizedPos : 'UNKNOWN';
+
+    const pos = validPos.includes(normalizedPos) ? normalizedPos : "UNKNOWN";
 
     // Normalize and validate register
     const normalizedRegister = params.register.toLowerCase();
-    const validRegisters: Register[] = ['formal', 'neutral', 'colloquial'];
-    const register = validRegisters.includes(normalizedRegister as Register) 
-      ? (normalizedRegister as Register) 
-      : 'neutral';
+    const validRegisters: Register[] = ["formal", "neutral", "colloquial"];
+    const register = validRegisters.includes(normalizedRegister as Register)
+      ? (normalizedRegister as Register)
+      : "neutral";
 
     return new Reading({
-        ...params,
-        pos,
-        register,
+      ...params,
+      pos,
+      register,
     });
   }
 }

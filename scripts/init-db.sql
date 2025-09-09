@@ -23,11 +23,11 @@ CREATE TABLE "public"."entries" (
 CREATE TABLE "public"."readings" (
     "id" BIGSERIAL NOT NULL,
     "entryId" BIGINT NOT NULL,
-    "jyutping" TEXT[] DEFAULT '{}',
+    "jyutping" TEXT[] DEFAULT '{}'::text[],
     "tone" TEXT NOT NULL,
     "pronunciation" TEXT NOT NULL,
-    "consonants" TEXT[] DEFAULT '{}',
-    "rhymes" TEXT[] DEFAULT '{}',
+    "consonants" TEXT[] DEFAULT '{}'::text[],
+    "rhymes" TEXT[] DEFAULT '{}'::text[],
     "syllables" INTEGER NOT NULL,
     "freq" DOUBLE PRECISION NOT NULL,
     "pos" TEXT NOT NULL,
@@ -86,6 +86,7 @@ ALTER TABLE "public"."readings" ADD CONSTRAINT "readings_entryId_fkey" FOREIGN K
 ALTER TABLE "public"."feedback" ADD CONSTRAINT "feedback_readingId_fkey" FOREIGN KEY ("readingId") REFERENCES "public"."readings"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Create the test database
+DROP DATABASE IF EXISTS cantolyr_test;
 CREATE DATABASE cantolyr_test;
 
 -- Grant permissions to the cantolyr user for both databases

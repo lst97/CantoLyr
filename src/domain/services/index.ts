@@ -1,1 +1,1 @@
-export { RankCombiner } from './RankCombiner.js';
+export { RankCombiner } from "./RankCombiner.ts";

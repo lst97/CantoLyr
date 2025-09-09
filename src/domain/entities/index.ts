@@ -1,2 +1,2 @@
-export { Entry } from './Entry.js';
-export { Reading } from './Reading.js';
+export { Entry } from "./Entry.ts";
+export { Reading } from "./Reading.ts";

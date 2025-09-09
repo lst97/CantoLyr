@@ -2,7 +2,9 @@
 
 ## Overview
 
-The CantoLyr API includes intelligent LLM-powered reranking capabilities for Cantonese readings. This feature helps composers find the most appropriate characters and words for their lyrical compositions based on semantic relevance, register, and artistic value.
+The CantoLyr API includes intelligent LLM-powered reranking capabilities for Cantonese readings.
+This feature helps composers find the most appropriate characters and words for their lyrical
+compositions based on semantic relevance, register, and artistic value.
 
 ## Available Implementations
 
@@ -21,13 +23,13 @@ Uses the official Google Gen AI SDK (`@google/genai`) to integrate with Google's
 **Configuration:**
 
 ```typescript
-import { GeminiLlmReranker } from './infrastructure/adapters/llm/GeminiLlmReranker.js';
+import { GeminiLlmReranker } from "./infrastructure/adapters/llm/GeminiLlmReranker.js";
 
 const reranker = new GeminiLlmReranker({
   apiKey: process.env.GEMINI_API_KEY,
-  model: 'gemini-2.5-flash', // Optional, defaults to gemini-2.5-flash
+  model: "gemini-2.5-flash", // Optional, defaults to gemini-2.5-flash
   timeoutMs: 30000, // Optional, defaults to 30 seconds
-  maxRetries: 3 // Optional, for future retry logic
+  maxRetries: 3, // Optional, for future retry logic
 });
 ```
 
@@ -56,47 +58,47 @@ Provides heuristic-based ranking without external API calls.
 Use the factory function for easy instantiation:
 
 ```typescript
-import { createLlmReranker } from './infrastructure/adapters/llm/index.js';
+import { createLlmReranker } from "./infrastructure/adapters/llm/index.js";
 
 // Create Gemini reranker
 const geminiReranker = createLlmReranker({
-  provider: 'gemini',
-  apiKey: process.env.GEMINI_API_KEY
+  provider: "gemini",
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
 // Create dummy reranker
 const dummyReranker = createLlmReranker({
-  provider: 'dummy'
+  provider: "dummy",
 });
 ```
 
 ## Usage Example
 
 ```typescript
-import type { RerankInput } from './application/ports/LlmReranker.js';
+import type { RerankInput } from "./application/ports/LlmReranker.js";
 
 const input: RerankInput = {
   candidates: [
     // Array of ReadingDTO objects
   ],
-  tonePattern: '43',
+  tonePattern: "43",
   constraints: {
-    theme: 'romantic',
-    mood: 'tender'
+    theme: "romantic",
+    mood: "tender",
   },
   context: {
-    genre: 'ballad'
+    genre: "ballad",
   },
-  topK: 5
+  topK: 5,
 };
 
 const result = await reranker.rerank(input);
 
 if (result.success) {
-  console.log('Rankings:', result.rankings);
-  console.log('Processing time:', result.processingTimeMs, 'ms');
+  console.log("Rankings:", result.rankings);
+  console.log("Processing time:", result.processingTimeMs, "ms");
 } else {
-  console.error('Error:', result.error);
+  console.error("Error:", result.error);
 }
 ```
 
@@ -104,7 +106,8 @@ if (result.success) {
 
 ### From Direct API Calls to Official SDK
 
-The implementation has been migrated from direct HTTP calls to the official Google Gen AI SDK for better reliability and maintainability.
+The implementation has been migrated from direct HTTP calls to the official Google Gen AI SDK for
+better reliability and maintainability.
 
 **Benefits of SDK Migration:**
 
@@ -123,7 +126,8 @@ The implementation has been migrated from direct HTTP calls to the official Goog
 ### Model Variants
 
 - For reduced latency and lower rate-limit pressure, you can use `gemini-2.5-flash-lite`.
-- Some tools support automatic fallback to Flash-Lite on rate-limit errors when `enableFallback` is true.
+- Some tools support automatic fallback to Flash-Lite on rate-limit errors when `enableFallback` is
+  true.
 
 ### Dependencies
 

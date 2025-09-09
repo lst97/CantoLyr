@@ -1,5 +1,9 @@
-import { PrismaClient, Prisma } from '@prisma/client';
-import type { WriteRepo, SelectionInput, FeedbackRecord } from '../../../application/ports/WriteRepo.js';
+import { PrismaClient } from "../../../../prisma/generated/client.ts";
+import type {
+  FeedbackRecord,
+  SelectionInput,
+  WriteRepo,
+} from "../../../application/ports/WriteRepo.ts";
 
 /**
  * Prisma implementation of WriteRepo for feedback recording operations
@@ -18,7 +22,7 @@ export class PrismaWriteRepository implements WriteRepo {
       accepted,
       sessionId,
       context,
-      timestamp = new Date()
+      timestamp = new Date(),
     } = input;
 
     await this.prisma.feedback.create({
@@ -26,9 +30,10 @@ export class PrismaWriteRepository implements WriteRepo {
         readingId,
         accepted,
         sessionId: sessionId || null,
-        context: context ?? Prisma.JsonNull,
-        createdAt: timestamp
-      }
+        // When context is undefined, omit the field
+        ...(context !== undefined ? { context } : {}),
+        createdAt: timestamp,
+      },
     });
   }
 
@@ -39,7 +44,7 @@ export class PrismaWriteRepository implements WriteRepo {
   async getFeedbackForReading(readingId: bigint): Promise<FeedbackRecord[]> {
     const feedback = await this.prisma.feedback.findMany({
       where: { readingId },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: "desc" },
     });
 
     return feedback.map(this.mapToFeedbackRecord);
@@ -52,7 +57,7 @@ export class PrismaWriteRepository implements WriteRepo {
   async getFeedbackForSession(sessionId: string): Promise<FeedbackRecord[]> {
     const feedback = await this.prisma.feedback.findMany({
       where: { sessionId },
-      orderBy: { createdAt: 'asc' } // Chronological order for session analysis
+      orderBy: { createdAt: "asc" }, // Chronological order for session analysis
     });
 
     return feedback.map(this.mapToFeedbackRecord);
@@ -64,8 +69,8 @@ export class PrismaWriteRepository implements WriteRepo {
    */
   async getRecentFeedback(limit: number = 100): Promise<FeedbackRecord[]> {
     const feedback = await this.prisma.feedback.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: limit
+      orderBy: { createdAt: "desc" },
+      take: limit,
     });
 
     return feedback.map(this.mapToFeedbackRecord);
@@ -81,7 +86,7 @@ export class PrismaWriteRepository implements WriteRepo {
       accepted: feedback.accepted,
       sessionId: feedback.sessionId,
       context: feedback.context,
-      createdAt: feedback.createdAt
+      createdAt: feedback.createdAt,
     };
   }
 }

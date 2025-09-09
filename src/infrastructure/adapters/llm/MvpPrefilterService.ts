@@ -1,10 +1,9 @@
-
-import { 
-  prefilterGroupsByTone,
-  type Group,
+import {
   type FetchByTone,
-  type PrefilterService
-} from "../../../application/services/mvpPrefilter.js";
+  type Group,
+  prefilterGroupsByTone,
+  type PrefilterService,
+} from "../../../application/services/mvpPrefilter.ts";
 
 /**
  * MVP implementation of PrefilterService using heuristic candidate reduction
@@ -17,7 +16,7 @@ export class MvpPrefilterService implements PrefilterService {
     tonePattern: string,
     fetchByTone: FetchByTone,
     maxPerGroup = 100,
-    seed?: number
+    seed?: number,
   ): Promise<Group[]> {
     return prefilterGroupsByTone(tonePattern, fetchByTone, maxPerGroup, seed);
   }
@@ -27,9 +26,9 @@ export class MvpPrefilterService implements PrefilterService {
    */
   getInfo() {
     return {
-      provider: 'MVP Heuristic Prefilter',
-      version: '1.0',
-      strategy: 'frequency-based + random sampling'
+      provider: "MVP Heuristic Prefilter",
+      version: "1.0",
+      strategy: "frequency-based + random sampling",
     };
   }
 

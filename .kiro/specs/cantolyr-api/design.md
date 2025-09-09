@@ -2,9 +2,14 @@
 
 ## Overview
 
-The CantoLyr API is a production-lean Node.js 22 + TypeScript system implementing hexagonal architecture with DDD-lite and CQRS-lite patterns. The system provides ultra-fast Cantonese character/word retrieval based on mapped tone patterns, with optional LLM-enhanced ranking using Google Gemini API.
+The CantoLyr API is a production-lean Node.js 22 + TypeScript system implementing hexagonal
+architecture with DDD-lite and CQRS-lite patterns. The system provides ultra-fast Cantonese
+character/word retrieval based on mapped tone patterns, with optional LLM-enhanced ranking using
+Google Gemini API.
 
-The architecture separates concerns through ports and adapters, enabling easy testing and future extensibility. The system uses Fastify for high-performance HTTP handling, Prisma for type-safe database access, and implements comprehensive caching and observability features.
+The architecture separates concerns through ports and adapters, enabling easy testing and future
+extensibility. The system uses Fastify for high-performance HTTP handling, Prisma for type-safe
+database access, and implements comprehensive caching and observability features.
 
 ## Architecture
 
@@ -43,23 +48,23 @@ The system follows hexagonal (ports and adapters) architecture with clear separa
 ```typescript
 // Entry: Represents a Cantonese character or vocabulary word
 interface Entry {
-  id: bigint
-  surface: string         // The actual text (e.g., "債權人", "亡")
-  type: EntryType        // 'vocab' | 'char'
-  lang: string           // Language code (zh-HK, misc, etc.)
-  readings: Reading[]
+  id: bigint;
+  surface: string; // The actual text (e.g., "債權人", "亡")
+  type: EntryType; // 'vocab' | 'char'
+  lang: string; // Language code (zh-HK, misc, etc.)
+  readings: Reading[];
 }
 
 // Reading: Pronunciation and tone information for an entry
 interface Reading {
-  id: bigint
-  jyutping: string[]
-  syllables: number      // Number of syllables (3 for "zaai3 kyun4 jan4")
-  freq: number           // Frequency score
-  pos: string            // Part of speech (NOUN, ADJ, NUM, etc.)
-  register: string       // Register (formal, neutral, colloquial)
-  gloss: string          // English definition
-  source: string         // Data source identifier
+  id: bigint;
+  jyutping: string[];
+  syllables: number; // Number of syllables (3 for "zaai3 kyun4 jan4")
+  freq: number; // Frequency score
+  pos: string; // Part of speech (NOUN, ADJ, NUM, etc.)
+  register: string; // Register (formal, neutral, colloquial)
+  gloss: string; // English definition
+  source: string; // Data source identifier
 }
 ```
 
@@ -68,7 +73,7 @@ interface Reading {
 ```typescript
 // ToneMap: Validates and encapsulates mapped tone patterns
 class ToneMap {
-  constructor(value: string) // validates against /^[039452]+$/
+  constructor(value: string); // validates against /^[039452]+$/
 }
 
 // Tone mapping: 1→3, 2→9, 3→4, 4→0, 5→5, 6→2
@@ -79,16 +84,16 @@ class ToneMap {
 ```typescript
 // GroupedSelectionService: Orchestrates prefiltering and LLM-based creative selection
 interface Group {
-  groupIndex: number
-  pattern: string
-  options: GroupedOption[]
+  groupIndex: number;
+  pattern: string;
+  options: GroupedOption[];
 }
 
 interface GroupedOption {
-  option: number
-  surface: string
-  readingId: bigint
-  freq?: number
+  option: number;
+  surface: string;
+  readingId: bigint;
+  freq?: number;
 }
 ```
 
@@ -97,7 +102,8 @@ interface GroupedOption {
 #### Use Cases
 
 1. **SearchUseCase**: Handles tone-based search with caching
-2. **ComposeLineUseCase**: Orchestrates heuristic prefiltering and LLM grouped selection for creative word composition
+2. **ComposeLineUseCase**: Orchestrates heuristic prefiltering and LLM grouped selection for
+   creative word composition
 3. **RecordFeedbackUseCase**: Records user selections for learning
 
 #### Compose Line Workflow (New MVP Approach)
@@ -108,7 +114,8 @@ interface GroupedOption {
    - Multi-digit tone groups: uniform random sampling
    - Deduplication by surface text keeping highest frequency
    - Cap each group to maxPerGroup (default 250)
-3. **LLM Creative Selection**: Present manageable candidate groups to LLM for creative word selection based on theme/mood/context
+3. **LLM Creative Selection**: Present manageable candidate groups to LLM for creative word
+   selection based on theme/mood/context
 
 ### Infrastructure Ports
 
@@ -116,12 +123,12 @@ interface GroupedOption {
 
 ```typescript
 interface ReadingRepo {
-  searchByToneMapped(query: SearchQuery): Promise<ReadingDTO[]>
-  getByIds(ids: bigint[]): Promise<ReadingDTO[]>
+  searchByToneMapped(query: SearchQuery): Promise<ReadingDTO[]>;
+  getByIds(ids: bigint[]): Promise<ReadingDTO[]>;
 }
 
 interface WriteRepo {
-  recordSelection(input: SelectionInput): Promise<void>
+  recordSelection(input: SelectionInput): Promise<void>;
 }
 ```
 
@@ -129,12 +136,12 @@ interface WriteRepo {
 
 ```typescript
 interface Cache {
-  get<T>(key: string): Promise<T | null>
-  set<T>(key: string, value: T, ttlSec: number): Promise<void>
+  get<T>(key: string): Promise<T | null>;
+  set<T>(key: string, value: T, ttlSec: number): Promise<void>;
 }
 
 interface LlmGroupedSelector {
-  selectFromGroups(input: GroupedSelectionInput): Promise<GroupedSelectionResult>
+  selectFromGroups(input: GroupedSelectionInput): Promise<GroupedSelectionResult>;
 }
 
 interface PrefilterService {
@@ -142,8 +149,8 @@ interface PrefilterService {
     tonePattern: string,
     fetchByTone: FetchByTone,
     maxPerGroup?: number,
-    seed?: number
-  ): Promise<Group[]>
+    seed?: number,
+  ): Promise<Group[]>;
 }
 ```
 
@@ -161,9 +168,11 @@ interface PrefilterService {
 
 #### LLM Adapters
 
-- **GeminiLlmGroupedSelector**: Google Gemini API integration for creative word selection from grouped candidates
+- **GeminiLlmGroupedSelector**: Google Gemini API integration for creative word selection from
+  grouped candidates
 - **DummyLlmGroupedSelector**: Deterministic fallback for testing/development
-- **MvpPrefilterService**: Heuristic candidate reduction using frequency-based and random sampling strategies
+- **MvpPrefilterService**: Heuristic candidate reduction using frequency-based and random sampling
+  strategies
 
 #### HTTP Adapters
 
@@ -259,25 +268,25 @@ The system expects JSONL (JSON Lines) format with the following structure:
 
 ```typescript
 interface JsonlParser {
-  parseFile(filePath: string): AsyncGenerator<RawEntry>
-  validateEntry(entry: unknown): RawEntry
-  normalizeEntry(entry: RawEntry): NormalizedEntry
+  parseFile(filePath: string): AsyncGenerator<RawEntry>;
+  validateEntry(entry: unknown): RawEntry;
+  normalizeEntry(entry: RawEntry): NormalizedEntry;
 }
 
 interface RawEntry {
-  surface: string
-  type: 'vocab' | 'char'
-  lang: string
-  readings: RawReading[]
+  surface: string;
+  type: "vocab" | "char";
+  lang: string;
+  readings: RawReading[];
 }
 
 interface RawReading {
-  jyutping: string
-  freq: number
-  pos: string
-  register: string
-  gloss: string
-  source: string
+  jyutping: string;
+  freq: number;
+  pos: string;
+  register: string;
+  gloss: string;
+  source: string;
 }
 ```
 
@@ -298,10 +307,10 @@ interface RawReading {
 ```typescript
 const SearchQuerySchema = z.object({
   v: z.string().refine(isValidMapped),
-  mode: z.enum(['all', 'vocab', 'char']).optional(),
+  mode: z.enum(["all", "vocab", "char"]).optional(),
   prefix: z.coerce.boolean().optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional()
-})
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
 
 const ComposeRequestSchema = z.object({
   tonePattern: z.string().refine(isValidMapped),
@@ -310,30 +319,30 @@ const ComposeRequestSchema = z.object({
   mood: z.string().optional(),
   genre: z.string().optional(),
   language: z.string().optional(),
-  seed: z.number().optional()
-})
+  seed: z.number().optional(),
+});
 ```
 
 #### Response DTOs
 
 ```typescript
 interface SearchResponse {
-  query: string
-  count: number
-  items: ReadingDTO[]
+  query: string;
+  count: number;
+  items: ReadingDTO[];
 }
 
 interface ComposeResponse {
-  selections: GroupSelection[]
-  line: string
-  reason?: string
+  selections: GroupSelection[];
+  line: string;
+  reason?: string;
 }
 
 interface GroupSelection {
-  group: number
-  option: number
-  surface: string
-  readingId: bigint
+  group: number;
+  option: number;
+  surface: string;
+  readingId: bigint;
 }
 ```
 
@@ -352,11 +361,11 @@ interface GroupSelection {
 ```typescript
 interface ErrorResponse {
   error: {
-    code: string
-    message: string
-    details?: any
-    requestId: string
-  }
+    code: string;
+    message: string;
+    details?: any;
+    requestId: string;
+  };
 }
 ```
 
@@ -412,12 +421,12 @@ interface ErrorResponse {
 ```typescript
 const ConfigSchema = z.object({
   DATABASE_URL: z.string().url(),
-  PORT: z.string().default('3000'),
-  LLM_ENABLED: z.string().default('false'),
+  PORT: z.string().default("3000"),
+  LLM_ENABLED: z.string().default("false"),
   GEMINI_API_KEY: z.string().optional(),
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-  CACHE_TTL: z.string().default('60')
-})
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  CACHE_TTL: z.string().default("60"),
+});
 ```
 
 ### Docker Configuration

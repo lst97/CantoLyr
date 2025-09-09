@@ -1,13 +1,16 @@
+import { decodeBase64 } from "jsr:@std/encoding/base64";
 import type {
-	LlmGroupedSelector,
 	GroupedSelectionInput,
 	GroupedSelectionResult,
-	LlmConfig,
 	GroupSelection,
-} from "../../../application/ports/LlmGroupedSelector.js";
-import { GoogleGenAI } from "@google/genai";
-import Ajv, { ValidateFunction } from "ajv";
-import { buildMvpGroupedSelectionPrompt } from "./prompts/mvpGroupedSelectionPrompt.js";
+	LlmConfig,
+	LlmGroupedSelector,
+} from "../../../application/ports/LlmGroupedSelector.ts";
+import { GoogleGenAI } from "npm:@google/genai";
+import * as Ajv from "ajv";
+import type { ValidateFunction } from "ajv";
+import { buildMvpGroupedSelectionPrompt } from "./prompts/mvpGroupedSelectionPrompt.ts";
+import { Logger } from "../../logging/Logger.ts";
 
 /**
  * Expected JSON structure from Gemini for grouped selection
@@ -37,15 +40,19 @@ const groupedSelectionResponseSchema = {
  * Provides intelligent grouped selection of Cantonese words based on creative context
  */
 export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
-	private readonly ajv: Ajv;
 	private readonly validateGroupedSelectionResponse: ValidateFunction;
+	private readonly formatAjvErrors: (errors?: unknown) => string;
 	private readonly genAI: GoogleGenAI;
 
 	constructor(private readonly config: LlmConfig) {
-		this.ajv = new Ajv();
-		this.validateGroupedSelectionResponse = this.ajv.compile(
+		const AjvCtor =
+			(Ajv as unknown as { default?: new (...args: any[]) => any }).default ??
+			(Ajv as unknown as new (...args: any[]) => any);
+		const ajv = new AjvCtor();
+		this.validateGroupedSelectionResponse = ajv.compile(
 			groupedSelectionResponseSchema
 		);
+		this.formatAjvErrors = ajv.errorsText.bind(ajv);
 		this.genAI = new GoogleGenAI({ apiKey: config.apiKey! });
 	}
 
@@ -120,7 +127,7 @@ export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
 		};
 	}
 
-	async validateConfig(): Promise<void> {
+	validateConfig(): void {
 		if (!this.config.apiKey) {
 			throw new Error("Gemini API key is required");
 		}
@@ -134,7 +141,7 @@ export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
 		}
 	}
 
-	private async generateContent(prompt: string) {
+	private generateContent(prompt: string) {
 		const model = this.config.model || "gemini-2.5-flash";
 
 		// Create a timeout promise if timeout is configured
@@ -170,7 +177,8 @@ export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
 	 * Supports both mocked `.text` property and real SDK `.response.text()` forms.
 	 */
 	private extractText(response: any): string | undefined {
-		console.log("Gemini response:", response);
+		const logger = Logger.for("app");
+		logger.debug("gemini_response_received");
 		try {
 			if (!response) return undefined;
 			// Unit test mock shape: { text: string }
@@ -228,9 +236,11 @@ export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
 								const b64 = inline?.data ?? inline?.bytes ?? inline?.b64;
 								if (typeof b64 === "string" && b64.length > 0) {
 									try {
-										const decoded = Buffer.from(b64, "base64").toString("utf8");
+										const decoded = new TextDecoder().decode(decodeBase64(b64));
 										if (decoded.trim().length > 0) return decoded;
-									} catch {}
+									} catch {
+										// ignore
+									}
 								}
 							}
 						}
@@ -277,7 +287,7 @@ export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
 
 			if (!this.validateGroupedSelectionResponse(parsed)) {
 				throw new Error(
-					`Invalid grouped selection response format: ${this.ajv.errorsText(
+					`Invalid grouped selection response format: ${this.formatAjvErrors(
 						this.validateGroupedSelectionResponse.errors
 					)}`
 				);

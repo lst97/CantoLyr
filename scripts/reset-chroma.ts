@@ -1,5 +1,3 @@
-#!/usr/bin/env tsx
-
 /**
  * Reset Chroma collections.
  *
@@ -12,29 +10,31 @@
  */
 
 import { ChromaClient } from "chromadb";
-import { loadEnvFile, getOptionalEnv } from "../src/infrastructure/config/env.js";
+import { load } from "std/dotenv/mod.ts";
 
 function parseArgFlag(name: string): boolean {
-  return process.argv.some((a) => a === `--${name}`);
+  return Deno.args.some((a) => a === `--${name}`);
 }
 
 function parseArgKV(name: string): string | undefined {
-  const found = process.argv.find((a) => a.startsWith(`--${name}=`));
+  const found = Deno.args.find((a) => a.startsWith(`--${name}=`));
   return found ? found.split("=", 2)[1] : undefined;
 }
 
 async function main() {
-  loadEnvFile();
-  const chromaUrl = getOptionalEnv("CHROMA_URL", "http://localhost:8000");
-  const collectionName =
-    parseArgKV("collection") || getOptionalEnv("CHROMA_COLLECTION", "cantolyr_lexicon_v1_768");
-  const resetAll = parseArgFlag("all") || /^(1|true|yes)$/i.test(String(getOptionalEnv("CHROMA_RESET_ALL", "")));
+  await load({ export: true });
+  const chromaUrl = Deno.env.get("CHROMA_URL") || "http://localhost:8000";
+  const collectionName = parseArgKV("collection") ||
+    Deno.env.get("CHROMA_COLLECTION") ||
+    "cantolyr_lexicon_v1_1024";
+  const resetAll = parseArgFlag("all") ||
+    /^(1|true|yes)$/i.test(String(Deno.env.get("CHROMA_RESET_ALL") || ""));
 
   const u = new URL(chromaUrl);
   const client = new ChromaClient({
-    ssl: u.protocol === 'https:',
+    ssl: u.protocol === "https:",
     host: u.hostname,
-    port: Number(u.port || (u.protocol === 'https:' ? 443 : 8000)),
+    port: Number(u.port || (u.protocol === "https:" ? 443 : 8000)),
   });
   console.log(`🔗 Chroma: ${chromaUrl}`);
 
@@ -64,7 +64,7 @@ async function main() {
         return;
       } catch (e) {
         console.error(`❌ Fallback delete failed: ${(e as any)?.message || e}`);
-        process.exit(1);
+        Deno.exit(1);
       }
     }
   }
@@ -79,9 +79,9 @@ async function main() {
       console.log("ℹ️  Collection did not exist; nothing to delete.");
     } else {
       console.error(`❌ Failed to delete collection: ${msg}`);
-      process.exit(1);
+      Deno.exit(1);
     }
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (import.meta.main) main();

@@ -1,4 +1,4 @@
-import type { ReadingDTO } from "../../application/ports/ReadingRepo.js";
+import type { ReadingDTO } from "../../application/ports/ReadingRepo.ts";
 
 export type GroupedOption = {
   option: number; // 1-based index used in the prompt
@@ -15,7 +15,7 @@ export type Group = {
 
 export type FetchByTone = (
   toneMapped: string,
-  limit: number
+  limit: number,
 ) => Promise<ReadingDTO[]>;
 
 /**
@@ -26,7 +26,7 @@ export interface PrefilterService {
     tonePattern: string,
     fetchByTone: FetchByTone,
     maxPerGroup?: number,
-    seed?: number
+    seed?: number,
   ): Promise<Group[]>;
 }
 
@@ -44,7 +44,7 @@ export async function prefilterGroupsByTone(
   tonePattern: string,
   fetchByTone: FetchByTone,
   maxPerGroup = 100,
-  seed?: number
+  seed?: number,
 ): Promise<Group[]> {
   const rng = seededRng(seed);
   const groups = tonePattern

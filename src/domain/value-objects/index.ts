@@ -1,1 +1,1 @@
-export { ToneMap } from './ToneMap.js';
+export { ToneMap } from "./ToneMap.ts";

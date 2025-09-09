@@ -1,9 +1,9 @@
 /**
  * ToneMap value object represents a mapped tone pattern for Cantonese characters/words.
- * 
+ *
  * Mapped tones use the following conversion:
  * 1 → 3, 2 → 9, 3 → 4, 4 → 0, 5 → 5, 6 → 2
- * 
+ *
  * Valid mapped tone patterns contain only digits: 0, 2, 3, 4, 5, 9
  */
 export class ToneMap {
@@ -11,7 +11,9 @@ export class ToneMap {
 
   constructor(value: string) {
     if (!ToneMap.isValid(value)) {
-      throw new Error(`Invalid tone map: "${value}". Must contain only mapped tone digits: 0, 2, 3, 4, 5, 9`);
+      throw new Error(
+        `Invalid tone map: "${value}". Must contain only mapped tone digits: 0, 2, 3, 4, 5, 9`,
+      );
     }
     this._value = value;
   }
@@ -28,7 +30,7 @@ export class ToneMap {
    * Check if a string is a valid mapped tone pattern
    */
   static isValid(value: string): boolean {
-    if (typeof value !== 'string' || value.length === 0) {
+    if (typeof value !== "string" || value.length === 0) {
       return false;
     }
     // Valid mapped tones: 0, 2, 3, 4, 5, 9
@@ -48,23 +50,23 @@ export class ToneMap {
    */
   static mapTones(originalTones: string): ToneMap {
     const toneMapping: Record<string, string> = {
-      '1': '3',
-      '2': '9',
-      '3': '4',
-      '4': '0',
-      '5': '5',
-      '6': '2'
+      "1": "3",
+      "2": "9",
+      "3": "4",
+      "4": "0",
+      "5": "5",
+      "6": "2",
     };
 
     const mappedTones = originalTones
-      .split('')
-      .map(tone => {
+      .split("")
+      .map((tone) => {
         if (tone in toneMapping) {
           return toneMapping[tone];
         }
         throw new Error(`Invalid original tone digit: "${tone}". Must be 1-6`);
       })
-      .join('');
+      .join("");
 
     return new ToneMap(mappedTones);
   }
