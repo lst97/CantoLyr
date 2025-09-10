@@ -2,7 +2,7 @@
  * Types for data normalization and JSONL parsing
  */
 
-import { EntryType, PartOfSpeech, Register } from './common.js';
+import { EntryType, PartOfSpeech, Register } from "./common.js";
 
 /**
  * Raw entry structure as it appears in JSONL files

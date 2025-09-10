@@ -1,7 +1,7 @@
-import type { ReadingRepo } from '../ports/ReadingRepo.js';
-import type { Cache } from '../ports/Cache.js';
-import type { LlmGroupedSelector, GroupedSelectionInput } from '../ports/LlmGroupedSelector.js';
-import { prefilterGroupsByTone, type Group, type FetchByTone } from '../services/mvpPrefilter.js';
+import type { ReadingRepo } from "../ports/ReadingRepo.ts";
+import type { Cache } from "../ports/Cache.ts";
+import type { GroupedSelectionInput, LlmGroupedSelector } from "../ports/LlmGroupedSelector.ts";
+import { type FetchByTone, type Group, prefilterGroupsByTone } from "../services/mvpPrefilter.ts";
 
 /**
  * Input for compose line use case
@@ -61,7 +61,7 @@ export class ComposeLineUseCase {
   constructor(
     private readonly readingRepo: ReadingRepo,
     private readonly cache: Cache,
-    private readonly llmGroupedSelector: LlmGroupedSelector
+    private readonly llmGroupedSelector: LlmGroupedSelector,
   ) {}
 
   /**
@@ -72,27 +72,30 @@ export class ComposeLineUseCase {
    */
   async execute(input: ComposeLineInput): Promise<ComposeLineOutput> {
     const startTime = Date.now();
-    
+
     // Validate and normalize input
     const normalizedInput = this.validateAndNormalizeInput(input);
-    
+
     // Generate cache key
     const cacheKey = this.generateCacheKey(normalizedInput);
-    
+
     // Try to get from cache first
     const cachedResult = await this.cache.get<ComposeLineOutput>(cacheKey);
     if (cachedResult) {
       return {
         ...cachedResult,
-        processingTimeMs: Date.now() - startTime
+        processingTimeMs: Date.now() - startTime,
       };
     }
 
     // Create fetch function for prefilter
-    const fetchByTone: FetchByTone = async (toneMapped: string, limit: number) => {
+    const fetchByTone: FetchByTone = async (
+      toneMapped: string,
+      limit: number,
+    ) => {
       return await this.readingRepo.searchByPronunciation({
         pronunciation: toneMapped,
-        limit
+        limit,
       });
     };
 
@@ -101,15 +104,21 @@ export class ComposeLineUseCase {
       normalizedInput.tonePattern,
       fetchByTone,
       normalizedInput.maxPerGroup,
-      normalizedInput.seed
+      normalizedInput.seed,
     );
 
     // Calculate statistics
     const totalCandidates = groups.reduce((sum, group) => {
       // Estimate total before filtering (this is approximate)
-      return sum + (group.options.length * ComposeLineUseCase.PREFILTER_POOL_MULTIPLIER);
+      return (
+        sum +
+        group.options.length * ComposeLineUseCase.PREFILTER_POOL_MULTIPLIER
+      );
     }, 0);
-    const filteredCandidates = groups.reduce((sum, group) => sum + group.options.length, 0);
+    const filteredCandidates = groups.reduce(
+      (sum, group) => sum + group.options.length,
+      0,
+    );
 
     // Attempt LLM grouped selection
     let result: ComposeLineOutput;
@@ -121,47 +130,70 @@ export class ComposeLineUseCase {
           language: normalizedInput.language,
           ...(normalizedInput.theme && { theme: normalizedInput.theme }),
           ...(normalizedInput.mood && { mood: normalizedInput.mood }),
-          ...(normalizedInput.genre && { genre: normalizedInput.genre })
+          ...(normalizedInput.genre && { genre: normalizedInput.genre }),
         };
 
-        const llmResult = await this.llmGroupedSelector.selectFromGroups(llmInput);
+        const llmResult = await this.llmGroupedSelector.selectFromGroups(
+          llmInput,
+        );
 
-        console.log('LLM result:', llmResult);
-        
         if (llmResult.success) {
           result = {
             line: llmResult.line,
-            selections: llmResult.selections.map(sel => {
-              const freq = this.findFreqForSelection(groups, sel.group, sel.option);
+            selections: llmResult.selections.map((sel) => {
+              const freq = this.findFreqForSelection(
+                groups,
+                sel.group,
+                sel.option,
+              );
               return {
                 group: sel.group,
                 option: sel.option,
                 surface: sel.surface,
                 readingId: sel.readingId,
-                ...(freq !== undefined && { freq })
+                ...(freq !== undefined && { freq }),
               };
             }),
             usedLlm: true,
             processingTimeMs: Date.now() - startTime,
             totalCandidates,
             filteredCandidates,
-            ...(llmResult.reason && { reason: llmResult.reason })
+            ...(llmResult.reason && { reason: llmResult.reason }),
           };
         } else {
           // LLM failed, fall back to heuristic selection
-          result = this.fallbackToHeuristicSelection(groups, startTime, totalCandidates, filteredCandidates);
+          result = this.fallbackToHeuristicSelection(
+            groups,
+            startTime,
+            totalCandidates,
+            filteredCandidates,
+          );
         }
       } else {
         // LLM not available, use heuristic selection
-        result = this.fallbackToHeuristicSelection(groups, startTime, totalCandidates, filteredCandidates);
+        result = this.fallbackToHeuristicSelection(
+          groups,
+          startTime,
+          totalCandidates,
+          filteredCandidates,
+        );
       }
-    } catch (error) {
+    } catch {
       // LLM error, fall back to heuristic selection
-      result = this.fallbackToHeuristicSelection(groups, startTime, totalCandidates, filteredCandidates);
+      result = this.fallbackToHeuristicSelection(
+        groups,
+        startTime,
+        totalCandidates,
+        filteredCandidates,
+      );
     }
 
     // Cache the result
-    await this.cache.set(cacheKey, result, ComposeLineUseCase.CACHE_TTL_SECONDS);
+    await this.cache.set(
+      cacheKey,
+      result,
+      ComposeLineUseCase.CACHE_TTL_SECONDS,
+    );
 
     return result;
   }
@@ -173,9 +205,9 @@ export class ComposeLineUseCase {
     groups: Group[],
     startTime: number,
     totalCandidates: number,
-    filteredCandidates: number
+    filteredCandidates: number,
   ): ComposeLineOutput {
-    const selections = groups.map(group => {
+    const selections = groups.map((group) => {
       // Select highest frequency option from each group as fallback
       const bestOption = group.options.reduce((best, current) => {
         return (current.freq ?? 0) > (best.freq ?? 0) ? current : best;
@@ -186,31 +218,35 @@ export class ComposeLineUseCase {
         option: bestOption.option,
         surface: bestOption.surface,
         readingId: bestOption.readingId,
-        ...(bestOption.freq !== undefined && { freq: bestOption.freq })
+        ...(bestOption.freq !== undefined && { freq: bestOption.freq }),
       };
     });
 
-    const line = selections.map(sel => sel.surface).join('');
+    const line = selections.map((sel) => sel.surface).join("");
 
     return {
       line,
       selections,
-      reason: 'Fallback to highest frequency selection per group',
+      reason: "Fallback to highest frequency selection per group",
       usedLlm: false,
       processingTimeMs: Date.now() - startTime,
       totalCandidates,
-      filteredCandidates
+      filteredCandidates,
     };
   }
 
   /**
    * Find frequency for a specific selection
    */
-  private findFreqForSelection(groups: Group[], groupIndex: number, optionIndex: number): number | undefined {
-    const group = groups.find(g => g.groupIndex === groupIndex);
+  private findFreqForSelection(
+    groups: Group[],
+    groupIndex: number,
+    optionIndex: number,
+  ): number | undefined {
+    const group = groups.find((g) => g.groupIndex === groupIndex);
     if (!group) return undefined;
-    
-    const option = group.options.find(o => o.option === optionIndex);
+
+    const option = group.options.find((o) => o.option === optionIndex);
     return option?.freq;
   }
 
@@ -218,46 +254,50 @@ export class ComposeLineUseCase {
    * Validate and normalize compose input
    */
   private validateAndNormalizeInput(
-    input: ComposeLineInput
+    input: ComposeLineInput,
   ): ComposeLineInput & { maxPerGroup: number; language: string } {
     if (!input.tonePattern) {
-      throw new Error('Tone pattern is required');
+      throw new Error("Tone pattern is required");
     }
 
     // Validate tone pattern format (mapped tones: 0,3,9,4,5,2)
     const cleanPattern = input.tonePattern.trim();
     if (!/^[039452\s]+$/.test(cleanPattern)) {
-      throw new Error('Invalid tone pattern. Must contain only mapped tone digits (0,3,9,4,5,2) and spaces');
+      throw new Error(
+        "Invalid tone pattern. Must contain only mapped tone digits (0,3,9,4,5,2) and spaces",
+      );
     }
 
     // Ensure we have at least one group
     const groups = cleanPattern.split(/\s+/).filter(Boolean);
     if (groups.length === 0) {
-      throw new Error('Tone pattern must contain at least one tone group');
+      throw new Error("Tone pattern must contain at least one tone group");
     }
 
     return {
       ...input,
       tonePattern: cleanPattern,
       maxPerGroup: input.maxPerGroup ?? ComposeLineUseCase.DEFAULT_MAX_PER_GROUP,
-      language: input.language ?? 'zh-HK'
+      language: input.language ?? "zh-HK",
     };
   }
 
   /**
    * Generate cache key for compose parameters
    */
-  private generateCacheKey(input: ComposeLineInput & { maxPerGroup: number; language: string; }): string {
+  private generateCacheKey(
+    input: ComposeLineInput & { maxPerGroup: number; language: string },
+  ): string {
     const parts = [
-      'compose',
-      input.tonePattern.replace(/\s+/g, '_'),
+      "compose",
+      input.tonePattern.replace(/\s+/g, "_"),
       input.maxPerGroup.toString(),
-      input.theme ?? 'none',
-      input.mood ?? 'none',
-      input.genre ?? 'none',
+      input.theme ?? "none",
+      input.mood ?? "none",
+      input.genre ?? "none",
       input.language,
-      input.seed?.toString() ?? 'random'
+      input.seed?.toString() ?? "random",
     ];
-    return parts.join(':');
+    return parts.join(":");
   }
 }

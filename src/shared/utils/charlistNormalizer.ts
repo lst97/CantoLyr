@@ -3,10 +3,13 @@
  * Converts character frequency data to standardized Entry/Reading format
  */
 
-import { normalizeJyutping } from "./jyutping.js";
-import { readFileSync } from "fs";
-import path from "path";
-import type { NormalizedEntry, NormalizedReading } from "../types/data.js";
+import { normalizeJyutping } from "./jyutping.ts";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import type { NormalizedEntry, NormalizedReading } from "../types/data.ts";
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 export interface CharlistData {
 	[surface: string]: {
@@ -53,7 +56,7 @@ let CANTONESE_TABLE: CantonesePinyinTable | null = null;
 function loadCantoneseTable(): CantonesePinyinTable {
 	if (CANTONESE_TABLE) return CANTONESE_TABLE;
 	const tablePath = path.resolve(
-		process.cwd(),
+		Deno.cwd(),
 		"data/sample/cantonese_pinyin_table.json"
 	);
 	const raw = readFileSync(tablePath, "utf-8");
@@ -127,20 +130,22 @@ function groupTokensIntoKGroups(tokens: string[], k: number): string[] {
 /**
  * Determines part of speech based on surface text
  */
-function determinePOS(surface: string): import("../types/common.js").PartOfSpeech {
+function determinePOS(
+	surface: string
+): import("../types/common.ts").PartOfSpeech {
 	// Numbers
 	if (/^[0-9]$/.test(surface)) {
-    return "NUM";
+		return "NUM";
 	}
 
 	// ASCII letters
 	if (/^[A-Za-z]$/.test(surface)) {
-    return "LETTER";
+		return "LETTER";
 	}
 
 	// For Chinese characters, default to NOUN
 	// In a real system, this would require linguistic analysis
-    return "NOUN";
+	return "NOUN";
 }
 
 /**
@@ -213,19 +218,19 @@ export function normalizeCharlistData(
 					surfaceTokenCount
 				);
 
-        const reading: NormalizedReading = {
-          jyutping: groupedJyutping,
-          tone,
-          pronunciation,
-          consonants,
-          rhymes,
-          syllables,
-          freq,
-          pos,
-          register: "neutral", // Default register for character data
-          gloss: generateGloss(surface, pos),
-          source: sourceVersion,
-        };
+				const reading: NormalizedReading = {
+					jyutping: groupedJyutping,
+					tone,
+					pronunciation,
+					consonants,
+					rhymes,
+					syllables,
+					freq,
+					pos,
+					register: "neutral", // Default register for character data
+					gloss: generateGloss(surface, pos),
+					source: sourceVersion,
+				};
 
 				const sig = `${normalizedJyutping}|${tone}`;
 				if (!seen.has(sig)) {
@@ -233,7 +238,7 @@ export function normalizeCharlistData(
 					seen.add(sig);
 				}
 			} catch (error) {
-				console.warn(
+				logger.warn(
 					`Failed to normalize reading "${jyutping}" for character "${surface}":`,
 					error
 				);

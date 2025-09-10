@@ -1,20 +1,24 @@
 # Data Source
 
-The lyric data in this directory is sourced from [翡翠粤语歌词 (Feitsui.com)](https://www.feitsui.com).
+The lyric data in this directory is sourced from
+[翡翠粤语歌词 (Feitsui.com)](https://www.feitsui.com).
 
 ## About Feitsui.com
 
-Feitsui.com is a website dedicated to Cantonese song lyrics. It provides Jyutping phonetic transcriptions for Cantonese songs to help users learn pronunciation and sing along. The site features a search function for songs and artists, lists of popular tracks, and recommendations.
+Feitsui.com is a website dedicated to Cantonese song lyrics. It provides Jyutping phonetic
+transcriptions for Cantonese songs to help users learn pronunciation and sing along. The site
+features a search function for songs and artists, lists of popular tracks, and recommendations.
 
 ## Data Information
 
-* **Source URL:** `https://www.feitsui.com`
-* **Number of Songs:** [Please fill in the approximate number of songs in the database]
-* **Languages:** The lyrics are primarily in Cantonese, with Jyutping phonetic transcriptions.
+- **Source URL:** `https://www.feitsui.com`
+- **Number of Songs:** [Please fill in the approximate number of songs in the database]
+- **Languages:** The lyrics are primarily in Cantonese, with Jyutping phonetic transcriptions.
 
 ## Data Format
 
-The data is stored in `.jsonl` format. Each line is a JSON object representing a single line of a lyric. Here is an example of the data structure:
+The data is stored in `.jsonl` format. Each line is a JSON object representing a single line of a
+lyric. Here is an example of the data structure:
 
 ```json
 {
@@ -35,20 +39,31 @@ The data is stored in `.jsonl` format. Each line is a JSON object representing a
 
   "prosody": {
     "tone_pattern": [5, 0, 2, 5, 0, 3, 5, 3, 9],
-    "tone_pattern_cantonese_jyutping": ["jyu5", "ting4", "zoi6", "nei5", "lei4", "hoi1", "dik1", "naa5", "jat1", "soeng2"]
+    "tone_pattern_cantonese_jyutping": [
+      "jyu5",
+      "ting4",
+      "zoi6",
+      "nei5",
+      "lei4",
+      "hoi1",
+      "dik1",
+      "naa5",
+      "jat1",
+      "soeng2"
+    ]
   },
 
   "nlp": {
     "tokens": [
-      {"text": "雨", "pos": "NOUN"},
-      {"text": "停", "pos": "VERB"},
-      {"text": "在", "pos": "ADP"},
-      {"text": "你", "pos": "PRON"},
-      {"text": "離開", "pos": "VERB"},
-      {"text": "的", "pos": "PART"},
-      {"text": "那", "pos": "DET"},
-      {"text": "一", "pos": "NUM"},
-      {"text": "晌", "pos": "NOUN"}
+      { "text": "雨", "pos": "NOUN" },
+      { "text": "停", "pos": "VERB" },
+      { "text": "在", "pos": "ADP" },
+      { "text": "你", "pos": "PRON" },
+      { "text": "離開", "pos": "VERB" },
+      { "text": "的", "pos": "PART" },
+      { "text": "那", "pos": "DET" },
+      { "text": "一", "pos": "NUM" },
+      { "text": "晌", "pos": "NOUN" }
     ],
     "syntax_notes": "主謂結構；時間狀語在句末"
   },

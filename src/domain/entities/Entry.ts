@@ -1,5 +1,5 @@
-import { Reading } from './Reading.js';
-import type { EntryType } from '../../shared/types/common.js';
+import { Reading } from "./Reading.ts";
+import type { EntryType } from "../../shared/types/common.ts";
 
 /**
  * Entry entity represents a Cantonese character or vocabulary word
@@ -24,16 +24,16 @@ export class Entry {
   }) {
     // Validate surface text
     if (!params.surface || params.surface.trim().length === 0) {
-      throw new Error('Surface text cannot be empty');
+      throw new Error("Surface text cannot be empty");
     }
 
     // Validate language code
     if (!params.lang || params.lang.trim().length === 0) {
-      throw new Error('Language code cannot be empty');
+      throw new Error("Language code cannot be empty");
     }
 
     // Validate entry type matches surface text characteristics
-    if (params.type === 'char' && params.surface.trim().length > 1) {
+    if (params.type === "char" && params.surface.trim().length > 1) {
       // Allow multi-character entries for char type (some characters may have variants)
       // but log a warning in production
     }
@@ -53,7 +53,7 @@ export class Entry {
   addReading(reading: Reading): Entry {
     // Validate that the reading belongs to this entry
     if (reading.entryId !== this.id) {
-      throw new Error('Reading entryId does not match this entry');
+      throw new Error("Reading entryId does not match this entry");
     }
 
     return new Entry({
@@ -63,7 +63,7 @@ export class Entry {
       lang: this.lang,
       readings: [...this.readings, reading],
       createdAt: this.createdAt,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     });
   }
 
@@ -71,9 +71,7 @@ export class Entry {
    * Get all readings that match a tone pattern
    */
   getReadingsForTonePattern(pattern: string, isPrefix: boolean = false): Reading[] {
-    return this.readings.filter(reading => 
-      reading.matchesTonePattern(pattern, isPrefix)
-    );
+    return this.readings.filter((reading) => reading.matchesTonePattern(pattern, isPrefix));
   }
 
   /**
@@ -84,7 +82,7 @@ export class Entry {
       return null;
     }
 
-    return this.readings.reduce((primary, current) => 
+    return this.readings.reduce((primary, current) =>
       current.freq > primary.freq ? current : primary
     );
   }
@@ -94,7 +92,7 @@ export class Entry {
    */
   getTonePatterns(): string[] {
     // pronunciation already stores mapped tone digits
-    const patterns = new Set(this.readings.map(r => r.pronunciation));
+    const patterns = new Set(this.readings.map((r) => r.pronunciation));
     return Array.from(patterns).sort();
   }
 
@@ -102,9 +100,7 @@ export class Entry {
    * Check if this entry has any readings matching the tone pattern
    */
   hasTonePattern(pattern: string, isPrefix: boolean = false): boolean {
-    return this.readings.some(reading => 
-      reading.matchesTonePattern(pattern, isPrefix)
-    );
+    return this.readings.some((reading) => reading.matchesTonePattern(pattern, isPrefix));
   }
 
   /**
@@ -126,7 +122,7 @@ export class Entry {
       lang: this.lang,
       readingCount: this.readings.length,
       tonePatterns: this.getTonePatterns(),
-      primaryReading: this.getPrimaryReading()
+      primaryReading: this.getPrimaryReading(),
     };
   }
 
@@ -142,7 +138,7 @@ export class Entry {
   }): Entry {
     // Validate and normalize type
     const normalizedType = params.type.toLowerCase();
-    if (normalizedType !== 'vocab' && normalizedType !== 'char') {
+    if (normalizedType !== "vocab" && normalizedType !== "char") {
       throw new Error(`Invalid entry type: ${params.type}. Must be 'vocab' or 'char'`);
     }
 
@@ -151,7 +147,7 @@ export class Entry {
       surface: params.surface,
       type: normalizedType as EntryType,
       lang: params.lang,
-      readings: [] // Readings will be added separately
+      readings: [], // Readings will be added separately
     });
   }
 }

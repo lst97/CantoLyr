@@ -1,4 +1,4 @@
-import type { Group } from '../services/mvpPrefilter.js';
+import type { Group } from "../services/mvpPrefilter.ts";
 
 /**
  * Input for LLM grouped selection operation
@@ -75,7 +75,9 @@ export interface LlmGroupedSelector {
    * Select one option from each group using LLM intelligence
    * Considers theme, mood, genre, and creative composition
    */
-  selectFromGroups(input: GroupedSelectionInput): Promise<GroupedSelectionResult>;
+  selectFromGroups(
+    input: GroupedSelectionInput,
+  ): Promise<GroupedSelectionResult>;
 
   /**
    * Check if the LLM service is available and configured
@@ -95,5 +97,5 @@ export interface LlmGroupedSelector {
    * Validate the LLM configuration
    * Throws an error if configuration is invalid
    */
-  validateConfig(): Promise<void>;
+  validateConfig(): void;
 }

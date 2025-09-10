@@ -1,6 +1,11 @@
 export type LineSemantics = {
   themes: string[]; // Traditional Chinese terms
-  sentiment: 'VERY_NEGATIVE' | 'NEGATIVE' | 'NEUTRAL' | 'POSITIVE' | 'VERY_POSITIVE';
+  sentiment:
+    | "VERY_NEGATIVE"
+    | "NEGATIVE"
+    | "NEUTRAL"
+    | "POSITIVE"
+    | "VERY_POSITIVE";
   keywords: string[]; // Traditional Chinese terms
 };
 
@@ -36,5 +41,5 @@ export interface LyricsAnnotatorConfig {
 
 export interface LyricsAnnotator {
   annotate(input: LyricsAnnotatorInput): Promise<LyricsAnnotatorOutput>;
-  validateConfig(): Promise<void>;
+  validateConfig(): void;
 }

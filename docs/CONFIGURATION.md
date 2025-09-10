@@ -1,6 +1,7 @@
 # Configuration Guide
 
-CantoLyr API uses a flexible configuration system that supports both hardcoded MVP settings and environment-based configuration.
+CantoLyr API uses a flexible configuration system that supports both hardcoded MVP settings and
+environment-based configuration.
 
 ## Quick Start (MVP)
 
@@ -78,9 +79,11 @@ CORS_ENABLED=true
 REQUEST_TIMEOUT=60000
 ```
 
-- REQUEST_TIMEOUT: Max time in ms the API server allows a request to run before timing out. Increase this if LLM calls can take longer.
+- REQUEST_TIMEOUT: Max time in ms the API server allows a request to run before timing out. Increase
+  this if LLM calls can take longer.
 
-Note: LLM requests have their own timeout controlled by `LLM_TIMEOUT_MS` (see LLM Provider section). Ensure both values are set high enough for your workload.
+Note: LLM requests have their own timeout controlled by `LLM_TIMEOUT_MS` (see LLM Provider section).
+Ensure both values are set high enough for your workload.
 
 ## Configuration Modes
 
@@ -109,13 +112,14 @@ curl http://localhost:3000/health
 Returns status for:
 
 - Database connectivity
-- Cache functionality  
+- Cache functionality
 - LLM service availability
 - Overall system health
 
 ## Configuration Validation
 
-All configuration is validated using Zod schemas. Invalid configurations will cause startup failures with detailed error messages.
+All configuration is validated using Zod schemas. Invalid configurations will cause startup failures
+with detailed error messages.
 
 ## Development Tips
 

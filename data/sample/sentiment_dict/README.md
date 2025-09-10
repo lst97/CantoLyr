@@ -1,4 +1,3 @@
-
 # Sentiment Dictionary
 
 This sentiment dictionary is a combination of multiple data sources.

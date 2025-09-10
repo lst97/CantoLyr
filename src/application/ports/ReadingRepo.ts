@@ -1,4 +1,4 @@
-import type { EntryType } from '../../shared/types/common.js';
+import type { EntryType } from "../../shared/types/common.ts";
 
 /**
  * Search query parameters for reading repository
@@ -75,7 +75,9 @@ export interface ReadingRepo {
   searchByPronunciation(query: SearchQuery): Promise<ReadingDTO[]>;
 
   /** Count by new pronunciation field */
-  countByPronunciation(query: Omit<SearchQuery, 'limit' | 'offset'>): Promise<number>;
+  countByPronunciation(
+    query: Omit<SearchQuery, "limit" | "offset">,
+  ): Promise<number>;
 
   /** Find readings that contain a specific rhyme in their decomposition */
   searchByRhyme(query: {

@@ -1,95 +1,146 @@
-#!/usr/bin/env node
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { load } from "jsr:@std/dotenv";
+import { Container } from "./infrastructure/container/Container.ts";
+import { registerHttpRoutes } from "./infrastructure/adapters/http/index.ts";
+import { requestLogger } from "./infrastructure/adapters/http/middleware/requestLogger.ts";
+import { Logger } from "./infrastructure/logging/Logger.ts";
+import { getLogger } from "jsr:@std/log";
 
-import { loadEnvFile } from './infrastructure/config/env.js';
-import { Container } from './infrastructure/container/Container.js';
+const logger = getLogger();
 
-/**
- * Main application entry point
- * Demonstrates the MVP configuration system
- */
-async function main(): Promise<void> {
-  try {
-    // Load environment variables from .env file if it exists
-    loadEnvFile();
+async function main() {
+  // Load environment variables from .env file
+  await load({ export: true });
 
-    // Initialize the dependency injection container
-    const container = Container.getInstance();
-    
-    console.log('🚀 CantoLyr API Starting...');
-    console.log(`📝 Environment: ${container.config.env}`);
-    console.log(`🗄️  Database: ${container.config.database.url}`);
-    console.log(`🤖 LLM Provider: ${container.config.llm.provider}`);
-    console.log(`💾 Cache Type: ${container.config.cache.type}`);
-    console.log(`🌐 Server: ${container.config.server.host}:${container.config.server.port}`);
+  // Create and initialize the dependency injection container
+  const container = await Container.create();
 
-    // Initialize database connection
-    await container.initialize();
+  const app = new Hono();
 
-    // Perform health check
+  // Setup CORS middleware and error handling
+  app.use("*", cors());
+  app.use("*", requestLogger());
+  app.onError((err, c) => {
+    const httpLogger = Logger.for("http");
+    const reqId = (c as unknown as { get?: (k: string) => unknown }).get?.(
+      "reqId",
+    ) as string | undefined;
+    httpLogger.error("unhandled_http_error", {
+      path: c.req.path,
+      method: c.req.method,
+      reqId,
+      error: err?.message ?? String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    return c.json(
+      { error: "Internal Server Error", message: err.message },
+      500,
+    );
+  });
+
+  // --- API Routes ---
+  app.get("/", (c) => c.text("CantoLyr API is running!"));
+
+  // Hono HTTP adapters
+  registerHttpRoutes(app, container);
+
+  // Health Check Endpoint
+  app.get("/health", async (c) => {
     const health = await container.healthCheck();
-    console.log('🏥 Health Check Results:');
-    console.log(`  Database: ${health.database ? '✅' : '❌'}`);
-    console.log(`  Cache: ${health.cache ? '✅' : '❌'}`);
-    console.log(`  LLM: ${health.llm ? '✅' : '❌'}`);
-    console.log(`  Overall: ${health.overall ? '✅' : '❌'}`);
+    const isHealthy = Object.values(health).every(Boolean);
+    return c.json(health, isHealthy ? 200 : 503);
+  });
 
-    if (!health.overall) {
-      console.warn('⚠️  Some services are not healthy. Check the logs above.');
+  // Search Endpoint
+  app.post("/search", async (c) => {
+    const searchUseCase = container.resolve("searchUseCase");
+    const body = await c.req.json();
+    const result = await searchUseCase.execute(body);
+    return c.json(result);
+  });
+
+  // Compose Endpoint
+  app.post("/compose", async (c) => {
+    const composeUseCase = container.resolve("composeLineUseCase");
+    const body = await c.req.json();
+    const result = await composeUseCase.execute(body);
+    return c.json(result);
+  });
+
+  // Feedback Endpoint
+  app.post("/feedback", async (c) => {
+    const feedbackUseCase = container.resolve("recordFeedbackUseCase");
+    const body = await c.req.json();
+    const result = await feedbackUseCase.execute(body);
+    return c.json(result);
+  });
+
+  // 404 handler
+  app.notFound((c) => {
+    const httpLogger = Logger.for("http");
+    const reqId = (c as unknown as { get?: (k: string) => unknown }).get?.(
+      "reqId",
+    ) as string | undefined;
+    httpLogger.warning("http_404", {
+      method: c.req.method,
+      path: c.req.path,
+      reqId,
+    });
+    return c.json({ error: "Not Found" }, 404);
+  });
+
+  // --- Server Initialization ---
+  const port = container.config.server.port;
+  container.services.logger.info("server_starting", {
+    url: `http://localhost:${port}`,
+  });
+
+  const server = Deno.serve({ port }, app.fetch);
+  container.services.logger.info("server_running", { port });
+
+  // Graceful shutdown
+  const shutdown = async () => {
+    container.services.logger.info("server_shutting_down");
+    try {
+      await server.shutdown();
+      await container.dispose();
+      container.services.logger.info("shutdown_complete");
+      Deno.exit(0);
+    } catch (error) {
+      container.services.logger.error("shutdown_error", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      Deno.exit(1);
     }
+  };
 
-    // Demonstrate use case access
-    console.log('\n🔧 Available Use Cases:');
-    console.log('  - Search Use Case: Ready');
-    console.log('  - Compose Line Use Case: Ready');
-    console.log('  - Record Feedback Use Case: Ready');
+  Deno.addSignalListener("SIGINT", shutdown);
+  Deno.addSignalListener("SIGTERM", shutdown);
 
-    console.log('\n✅ CantoLyr API initialized successfully!');
-    
-    // Start the HTTP server
-    console.log('🌐 Starting HTTP server...');
-    await container.server.start();
-    
-    console.log('🚀 CantoLyr API is now running!');
-    console.log(`📖 API Documentation: http://${container.config.server.host}:${container.config.server.port}/docs`);
-    console.log(`🏥 Health Check: http://${container.config.server.host}:${container.config.server.port}/health`);
-
-  } catch (error) {
-    console.error('❌ Failed to initialize CantoLyr API:', error);
-    process.exit(1);
-  }
+  // Global error listeners
+  addEventListener("unhandledrejection", (event) => {
+    container.services.logger.error("unhandled_promise_rejection", {
+      reason: (event as PromiseRejectionEvent).reason?.message ??
+        String((event as PromiseRejectionEvent).reason),
+    });
+  });
+  addEventListener("error", (event) => {
+    const e = event as ErrorEvent;
+    container.services.logger.error("unhandled_error_event", {
+      message: e.message,
+      filename: e.filename,
+      lineno: e.lineno,
+      colno: e.colno,
+      stack: e.error?.stack,
+    });
+  });
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Received SIGINT, shutting down gracefully...');
-  try {
-    const container = Container.getInstance();
-    await container.dispose();
-    console.log('✅ Shutdown complete');
-    process.exit(0);
-  } catch (error) {
-    console.error('❌ Error during shutdown:', error);
-    process.exit(1);
-  }
-});
-
-process.on('SIGTERM', async () => {
-  console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
-  try {
-    const container = Container.getInstance();
-    await container.dispose();
-    console.log('✅ Shutdown complete');
-    process.exit(0);
-  } catch (error) {
-    console.error('❌ Error during shutdown:', error);
-    process.exit(1);
-  }
-});
-
-// Run the application
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error('❌ Unhandled error:', error);
-    process.exit(1);
+if (import.meta.main) {
+  main().catch((err) => {
+    logger.error("❌ Unhandled error during startup:", err);
+    Deno.exit(1);
   });
 }

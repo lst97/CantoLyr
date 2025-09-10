@@ -1,22 +1,22 @@
 // Application ports (interfaces) for dependency inversion
-export type { ReadingRepo, SearchQuery, ReadingDTO } from './ReadingRepo.js';
-export type { WriteRepo, SelectionInput, FeedbackRecord } from './WriteRepo.js';
-export type { Cache, CacheStats, CacheOptions } from './Cache.js';
+export type { ReadingDTO, ReadingRepo, SearchQuery } from "./ReadingRepo.ts";
+export type { FeedbackRecord, SelectionInput, WriteRepo } from "./WriteRepo.ts";
+export type { Cache, CacheOptions, CacheStats } from "./Cache.ts";
 
 // Legacy LLM reranker (deprecated)
-export type { 
-  LlmReranker, 
-  RerankInput, 
-  RerankResult, 
-  RankingItem, 
-  LlmConfig as LegacyLlmConfig
-} from './LlmReranker.js';
+export type {
+  LlmConfig as LegacyLlmConfig,
+  LlmReranker,
+  RankingItem,
+  RerankInput,
+  RerankResult,
+} from "./LlmReranker.ts";
 
 // New LLM grouped selector
 export type {
-  LlmGroupedSelector,
   GroupedSelectionInput,
   GroupedSelectionResult,
   GroupSelection,
-  LlmConfig
-} from './LlmGroupedSelector.js';
+  LlmConfig,
+  LlmGroupedSelector,
+} from "./LlmGroupedSelector.ts";

@@ -1,9 +1,9 @@
-export type { EntryType, PartOfSpeech, Register } from './common.js';
-export type { 
-  RawEntry, 
-  RawReading, 
-  NormalizedEntry, 
-  NormalizedReading, 
-  ParseResult, 
-  ParseStats 
-} from './data.js';
+export type { EntryType, PartOfSpeech, Register } from "./common.js";
+export type {
+  NormalizedEntry,
+  NormalizedReading,
+  ParseResult,
+  ParseStats,
+  RawEntry,
+  RawReading,
+} from "./data.js";

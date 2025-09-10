@@ -1,49 +1,53 @@
-#!/usr/bin/env tsx
-
 /**
  * Script to normalize wordslist.json data to JSONL format
- * Usage: tsx scripts/normalize-wordslist.ts [input-file] [output-file]
+ * Usage: deno run -A scripts/normalize-wordslist.ts [input-file] [output-file]
  */
-
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { dirname } from "jsr:@std/path";
 import {
 	processWordslistToJSONL,
 	type WordslistData,
-} from "../src/shared/utils/wordslistNormalizer.js";
+} from "../src/shared/utils/wordslistNormalizer.ts";
+
+// Setup structured logger using @std/log
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 async function main() {
 	try {
-		const inputFile = process.argv[2] || "data/sample/wordslist.json";
-		const outputFile = process.argv[3] || "data/normalized/vocab.jsonl";
-		const wordDetailFile = process.argv[4] || "data/sample/word_detail.json";
-		const charlistFile = process.argv[5] || "data/sample/charlist.json";
+		const inputFile = Deno.args[0] || "data/sample/wordslist.json";
+		const outputFile = Deno.args[1] || "data/normalized/vocab.jsonl";
+		const wordDetailFile = Deno.args[2] || "data/sample/word_detail.json";
+		const charlistFile = Deno.args[3] || "data/sample/charlist.json";
 
-		console.log(`🔄 Normalizing wordslist data from: ${inputFile}`);
+		logger.info(`🔄 Normalizing wordslist data from: ${inputFile}`);
 
 		// Check if input file exists
-		if (!existsSync(inputFile)) {
-			console.error(`❌ Input file not found: ${inputFile}`);
-			process.exit(1);
+		try {
+			await Deno.stat(inputFile);
+		} catch {
+			logger.error(`❌ Input file not found: ${inputFile}`);
+			Deno.exit(1);
 		}
 
 		// Read and parse the wordslist data
-		const rawData = readFileSync(inputFile, "utf-8");
+		const rawData = await Deno.readTextFile(inputFile);
 
 		// Handle empty file
 		if (!rawData.trim()) {
-			console.log(`⚠️  Input file is empty: ${inputFile}`);
-			console.log(`📝 Creating empty JSONL file: ${outputFile}`);
-			writeFileSync(outputFile, "", "utf-8");
+			logger.warn(`⚠️  Input file is empty: ${inputFile}`);
+			logger.info(`📝 Creating empty JSONL file: ${outputFile}`);
+			await Deno.writeTextFile(outputFile, "");
 			return;
 		}
 
 		let wordslistData: WordslistData = JSON.parse(rawData);
 
 		// Deduplicate: remove words that already exist in charlist
-		if (existsSync(charlistFile)) {
+		try {
+			await Deno.stat(charlistFile);
 			try {
-				const rawChar = readFileSync(charlistFile, "utf-8");
+				const rawChar = await Deno.readTextFile(charlistFile);
 				const charData = JSON.parse(rawChar) as Record<string, unknown>;
 				const charSurfaces = new Set(Object.keys(charData));
 				const before = Object.keys(wordslistData).length;
@@ -54,21 +58,21 @@ async function main() {
 				const after = Object.keys(filtered).length;
 				const removed = before - after;
 				if (removed > 0) {
-					console.log(
+					logger.info(
 						`🧹 Removed ${removed} duplicated entries present in charlist (${before} -> ${after}).`
 					);
 				}
 				wordslistData = filtered;
-			} catch (e) {
-				console.warn(
+			} catch (_e) {
+				logger.warn(
 					`⚠️  Failed to load/parse charlist for dedup at ${charlistFile}. Proceeding without dedup.`
 				);
 			}
-		} else {
-			console.log(`ℹ️  Charlist not found, skipping dedup: ${charlistFile}`);
+		} catch {
+			logger.info(`ℹ️  Charlist not found, skipping dedup: ${charlistFile}`);
 		}
 
-		console.log(`📊 Processing ${Object.keys(wordslistData).length} words...`);
+		logger.info(`📊 Processing ${Object.keys(wordslistData).length} words...`);
 
 		// Process the data
 		let jsonlOutput = processWordslistToJSONL(
@@ -76,14 +80,15 @@ async function main() {
 			"words_hk_v28042025"
 		);
 
-		// Apply word frequency overrides from book_word_freq.js (per-million)
+		// Apply word frequency overrides from book_word_freq.ts (per-million)
 		// Only apply to multi-character words (length > 1)
-		const bookWordFreqFile = process.argv[6] || "data/sample/book_word_freq.js";
-		if (existsSync(bookWordFreqFile)) {
-			console.log(
+		const bookWordFreqFile = Deno.args[4] || "data/sample/book_word_freq.ts";
+		try {
+			await Deno.stat(bookWordFreqFile);
+			logger.info(
 				`📐 Applying word frequency overrides from: ${bookWordFreqFile}`
 			);
-			const freqMap = loadWordFreqPerMillion(bookWordFreqFile);
+			const freqMap = await loadWordFreqPerMillion(bookWordFreqFile);
 			if (freqMap.size > 0) {
 				// Compute a conservative baseline so any word present in book freq
 				// is strictly higher than non-listed words
@@ -93,7 +98,7 @@ async function main() {
 				const minPositive = values.length ? Math.min(...values) : undefined;
 				const baseline =
 					minPositive !== undefined ? Math.max(1e-6, minPositive / 2) : 1e-6;
-				console.log(
+				logger.info(
 					`   ↳ Using baseline freq for missing words: ${baseline.toFixed(6)}`
 				);
 				const lines = jsonlOutput.split("\n").filter(Boolean);
@@ -131,22 +136,23 @@ async function main() {
 					}
 				}
 				jsonlOutput = updated.join("\n");
-				console.log(
+				logger.info(
 					`🎚️  Word frequency overrides applied to ${changed} vocab entries; baseline set on ${baselineApplied}; skipped zh-HK: ${skippedZhHK}.`
 				);
 			} else {
-				console.log("ℹ️  No valid word frequency overrides found. Skipping.");
+				logger.info("ℹ️  No valid word frequency overrides found. Skipping.");
 			}
-		} else {
-			console.log(
+		} catch {
+			logger.info(
 				`ℹ️  Word frequency file not found, keeping original freqs: ${bookWordFreqFile}`
 			);
 		}
 
 		// Enrich with word_detail.json if available: set gloss from explanation and lang to zh-TW
-		if (existsSync(wordDetailFile)) {
-			console.log(`🔎 Enriching with details from: ${wordDetailFile}`);
-			const rawDetail = readFileSync(wordDetailFile, "utf-8");
+		try {
+			await Deno.stat(wordDetailFile);
+			logger.info(`🔎 Enriching with details from: ${wordDetailFile}`);
+			const rawDetail = await Deno.readTextFile(wordDetailFile);
 			type WordDetailItem = { word: string; explanation?: string };
 			let details: WordDetailItem[] = [];
 			try {
@@ -186,7 +192,7 @@ async function main() {
 						try {
 							return JSON.parse(s) as WordDetailItem;
 						} catch {
-							console.warn(
+							logger.warn(
 								`Skipping invalid JSON object #${idx + 1} in detail file`
 							);
 							return null as unknown as WordDetailItem;
@@ -232,11 +238,11 @@ async function main() {
 				}
 			}
 			jsonlOutput = updated.join("\n");
-			console.log(
+			logger.info(
 				`🧴 Enriched ${enriched} vocab entries with gloss; ${untouched} unchanged.`
 			);
-		} else {
-			console.log(
+		} catch {
+			logger.info(
 				`ℹ️  Detail file not found, skipping enrichment: ${wordDetailFile}`
 			);
 		}
@@ -246,35 +252,40 @@ async function main() {
 			"data/sample/sentiment_dict/sentiment_dictionary.json";
 		const detailedSentPath =
 			"data/sample/sentiment_dict/大連理工情感詞彙本體/sentiments.json";
-		let coarseMap = new Map<string, string>();
-		let detailedRegMap = new Map<string, string>();
-		let detailedPosMap = new Map<string, string>();
-		if (existsSync(coarseSentPath)) {
+		const coarseMap = new Map<string, string>();
+		const detailedRegMap = new Map<string, string>();
+		const detailedPosMap = new Map<string, string>();
+		try {
+			await Deno.stat(coarseSentPath);
 			try {
-				const raw = readFileSync(coarseSentPath, "utf-8");
+				const raw = await Deno.readTextFile(coarseSentPath);
 				const obj = JSON.parse(raw) as Record<string, string[]>;
 				for (const [k, arr] of Object.entries(obj)) {
 					const keyUpper = k.toUpperCase();
-					if (Array.isArray(arr))
-						for (const w of arr)
-							if (typeof w === "string" && w.trim())
+					if (Array.isArray(arr)) {
+						for (const w of arr) {
+							if (typeof w === "string" && w.trim()) {
 								coarseMap.set(w.trim(), keyUpper);
+							}
+						}
+					}
 				}
-				console.log(`🧭 Loaded coarse sentiments for ${coarseMap.size} terms.`);
+				logger.info(`🧭 Loaded coarse sentiments for ${coarseMap.size} terms.`);
 			} catch {
-				console.warn(
+				logger.warn(
 					`⚠️  Failed to parse coarse sentiment dictionary at ${coarseSentPath}`
 				);
 			}
-		} else {
-			console.log(
+		} catch {
+			logger.info(
 				`ℹ️  Coarse sentiment dictionary not found: ${coarseSentPath}`
 			);
 		}
 
-		if (existsSync(detailedSentPath)) {
+		try {
+			await Deno.stat(detailedSentPath);
 			try {
-				const raw = readFileSync(detailedSentPath, "utf-8");
+				const raw = await Deno.readTextFile(detailedSentPath);
 				const arr = JSON.parse(raw) as Array<Record<string, any>>;
 				for (const it of arr) {
 					if (!it) continue;
@@ -284,21 +295,23 @@ async function main() {
 					if (typeof w !== "string" || !w.trim()) continue;
 					const reg = (it["情感分類"] ?? it["register"]) as string | undefined;
 					const pos = (it["詞性種類"] ?? it["pos"]) as string | undefined;
-					if (typeof reg === "string" && reg.trim())
+					if (typeof reg === "string" && reg.trim()) {
 						detailedRegMap.set(w.trim(), reg.trim().toUpperCase());
-					if (typeof pos === "string" && pos.trim())
+					}
+					if (typeof pos === "string" && pos.trim()) {
 						detailedPosMap.set(w.trim(), pos.trim().toUpperCase());
+					}
 				}
-				console.log(
+				logger.info(
 					`🧭 Loaded detailed sentiments for ${detailedRegMap.size} terms; POS for ${detailedPosMap.size}.`
 				);
 			} catch {
-				console.warn(
+				logger.warn(
 					`⚠️  Failed to parse detailed sentiment dictionary at ${detailedSentPath}`
 				);
 			}
-		} else {
-			console.log(
+		} catch {
+			logger.info(
 				`ℹ️  Detailed sentiment dictionary not found: ${detailedSentPath}`
 			);
 		}
@@ -340,26 +353,30 @@ async function main() {
 				}
 			}
 			jsonlOutput = updated2.join("\n");
-			console.log(
+			logger.info(
 				`🧾 Sentiment updates -> coarse: ${coarseApplied}, detailed register: ${regReplaced}, POS: ${posReplaced}`
 			);
 		}
 
 		// Ensure output directory exists and write file
-		mkdirSync(dirname(outputFile), { recursive: true });
-		writeFileSync(outputFile, jsonlOutput, "utf-8");
+		try {
+			await Deno.stat(dirname(outputFile));
+		} catch {
+			await Deno.mkdir(dirname(outputFile), { recursive: true });
+		}
+		await Deno.writeTextFile(outputFile, jsonlOutput);
 
-		console.log(`✅ Normalized data written to: ${outputFile}`);
+		logger.info(`✅ Normalized data written to: ${outputFile}`);
 
 		if (jsonlOutput.trim()) {
 			const lines = jsonlOutput.split("\n").filter((line) => line.trim());
-			console.log(`📊 Generated ${lines.length} entries`);
+			logger.info(`📊 Generated ${lines.length} entries`);
 
 			// Show sample output
-			console.log("\n📋 Sample normalized entries:");
+			logger.info("\n📋 Sample normalized entries:");
 			lines.slice(0, 5).forEach((line, index) => {
 				const entry = JSON.parse(line);
-				console.log(
+				logger.info(
 					`${index + 1}. ${entry.surface} (${entry.type}, ${entry.lang}) - ${
 						entry.readings.length
 					} reading(s)`
@@ -367,7 +384,7 @@ async function main() {
 			});
 
 			if (lines.length > 5) {
-				console.log(`... and ${lines.length - 5} more entries`);
+				logger.info(`... and ${lines.length - 5} more entries`);
 			}
 
 			// Show statistics
@@ -378,24 +395,26 @@ async function main() {
 			const enEntries = entries.filter((e) => e.lang === "en").length;
 			const miscEntries = entries.filter((e) => e.lang === "misc").length;
 
-			console.log("\n📈 Statistics:");
-			console.log(`   Vocabulary entries: ${vocabEntries}`);
-			console.log(`   Chinese (zh-HK): ${zhEntries}`);
-			console.log(`   Chinese (zh-TW): ${zhTWEntries}`);
-			console.log(`   English: ${enEntries}`);
-			console.log(`   Miscellaneous: ${miscEntries}`);
+			logger.info("\n📈 Statistics:");
+			logger.info(`   Vocabulary entries: ${vocabEntries}`);
+			logger.info(`   Chinese (zh-HK): ${zhEntries}`);
+			logger.info(`   Chinese (zh-TW): ${zhTWEntries}`);
+			logger.info(`   English: ${enEntries}`);
+			logger.info(`   Miscellaneous: ${miscEntries}`);
 		} else {
-			console.log(`📊 No valid entries generated`);
+			logger.info(`📊 No valid entries generated`);
 		}
 	} catch (error) {
-		console.error("❌ Error normalizing wordslist data:", error);
-		process.exit(1);
+		logger.error("❌ Error normalizing wordslist data:", error);
+		Deno.exit(1);
 	}
 }
 
-// Load word raw counts from a file like data/sample/book_word_freq.js and return per-million frequencies
-function loadWordFreqPerMillion(filePath: string): Map<string, number> {
-	const raw = readFileSync(filePath, "utf-8");
+// Load word raw counts from a file like data/sample/book_word_freq.ts and return per-million frequencies
+async function loadWordFreqPerMillion(
+	filePath: string
+): Promise<Map<string, number>> {
+	const raw = await Deno.readTextFile(filePath);
 	const lines = raw.split(/\r?\n/);
 	const pairs: Array<{ w: string; c: number }> = [];
 
@@ -407,8 +426,9 @@ function loadWordFreqPerMillion(filePath: string): Map<string, number> {
 			trimmed.startsWith("//") ||
 			trimmed.startsWith("/*") ||
 			trimmed.startsWith("*")
-		)
+		) {
 			continue;
+		}
 		// Remove potential trailing commas or semicolons
 		const clean = trimmed.replace(/[;,]$/, "");
 		// Try simple tab or whitespace split (word may contain spaces rarely; prefer last numeric token)
@@ -472,6 +492,6 @@ function loadWordFreqPerMillion(filePath: string): Map<string, number> {
 	return map;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
 	main();
 }

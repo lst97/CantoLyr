@@ -1,37 +1,40 @@
-#!/usr/bin/env tsx
-
 /**
  * Script to normalize charlist.json data to JSONL format
- * Usage: tsx scripts/normalize-charlist.ts [input-file] [output-file]
+ * Usage: deno run -A scripts/normalize-charlist.ts [input-file] [output-file]
  */
-
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { dirname } from "jsr:@std/path";
 import {
-	processCharlistToJSONL,
 	type CharlistData,
-} from "../src/shared/utils/charlistNormalizer.js";
+	processCharlistToJSONL,
+} from "../src/shared/utils/charlistNormalizer.ts";
+
+// Setup structured logger using @std/log
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 async function main() {
 	try {
-		const inputFile = process.argv[2] || "data/sample/charlist.json";
-		const outputFile = process.argv[3] || "data/normalized/chars.jsonl";
-		const charDetailFile = process.argv[4] || "data/sample/char_detail.json";
-		const charFreqFile = process.argv[5] || "data/sample/char_freq.json";
+		const inputFile = Deno.args[0] || "data/sample/charlist.json";
+		const outputFile = Deno.args[1] || "data/normalized/chars.jsonl";
+		const charDetailFile = Deno.args[2] || "data/sample/char_detail.json";
+		const charFreqFile = Deno.args[3] || "data/sample/char_freq.json";
 
-		console.log(`🔄 Normalizing charlist data from: ${inputFile}`);
+		logger.info(`🔄 Normalizing charlist data from: ${inputFile}`);
 
 		// Check if input file exists
-		if (!existsSync(inputFile)) {
-			console.error(`❌ Input file not found: ${inputFile}`);
-			process.exit(1);
+		try {
+			await Deno.stat(inputFile);
+		} catch {
+			logger.error(`❌ Input file not found: ${inputFile}`);
+			Deno.exit(1);
 		}
 
 		// Read and parse the charlist data
-		const rawData = readFileSync(inputFile, "utf-8");
+		const rawData = await Deno.readTextFile(inputFile);
 		const charlistData: CharlistData = JSON.parse(rawData);
 
-		console.log(
+		logger.info(
 			`📊 Processing ${Object.keys(charlistData).length} characters...`
 		);
 
@@ -44,9 +47,10 @@ async function main() {
 		// If char_detail.json exists, enrich gloss and adjust lang
 		let enrichedCount = 0;
 		let skippedCount = 0;
-		if (existsSync(charDetailFile)) {
-			console.log(`🔎 Enriching with details from: ${charDetailFile}`);
-			const rawDetail = readFileSync(charDetailFile, "utf-8");
+		try {
+			await Deno.stat(charDetailFile);
+			logger.info(`🔎 Enriching with details from: ${charDetailFile}`);
+			const rawDetail = await Deno.readTextFile(charDetailFile);
 			type CharDetailItem = {
 				char: string;
 				pronunciations?: Array<{
@@ -99,8 +103,8 @@ async function main() {
 					.map((s, idx) => {
 						try {
 							return JSON.parse(s) as CharDetailItem;
-						} catch (e) {
-							console.warn(
+						} catch {
+							logger.warn(
 								`Skipping invalid JSON object #${idx + 1} in detail file`
 							);
 							return null as unknown as CharDetailItem;
@@ -158,20 +162,20 @@ async function main() {
 				}
 			}
 			jsonlOutput = updatedLines.join("\n");
-			console.log(
+			logger.info(
 				`🧴 Enriched ${enrichedCount} entries with gloss from details (${skippedCount} skipped).`
 			);
-		} else {
-			console.log(
+		} catch {
+			logger.info(
 				`ℹ️  Detail file not found, skipping enrichment: ${charDetailFile}`
 			);
 		}
 
-
 		// Apply char frequency overrides if provided
-		if (existsSync(charFreqFile)) {
-			console.log(`📐 Applying frequency overrides from: ${charFreqFile}`);
-			const rawFreq = readFileSync(charFreqFile, "utf-8");
+		try {
+			await Deno.stat(charFreqFile);
+			logger.info(`📐 Applying frequency overrides from: ${charFreqFile}`);
+			const rawFreq = await Deno.readTextFile(charFreqFile);
 			type CharFreqItem = { [k: string]: any };
 			let items: CharFreqItem[] = [];
 			try {
@@ -194,24 +198,44 @@ async function main() {
 						else if (ch === '"') inStr = false;
 					} else {
 						if (ch === '"') inStr = true;
-						else if (ch === "{") { if (depth === 0) start = i; depth++; }
-						else if (ch === "}") { depth--; if (depth === 0 && start >= 0) { objs.push(rawFreq.slice(start, i + 1)); start = -1; } }
+						else if (ch === "{") {
+							if (depth === 0) start = i;
+							depth++;
+						} else if (ch === "}") {
+							depth--;
+							if (depth === 0 && start >= 0) {
+								objs.push(rawFreq.slice(start, i + 1));
+								start = -1;
+							}
+						}
 					}
 				}
 				items = objs
-					.map((s) => { try { return JSON.parse(s) as CharFreqItem; } catch { return null as unknown as CharFreqItem; } })
+					.map((s) => {
+						try {
+							return JSON.parse(s) as CharFreqItem;
+						} catch {
+							return null as unknown as CharFreqItem;
+						}
+					})
 					.filter((x): x is CharFreqItem => !!x);
 			}
 
 			// Build map of char -> frequency (prefer per-million if present)
 			const freqMap = new Map<string, number>();
 			for (const it of items) {
-				const char = (it["character"] ?? it["char"] ?? it["surface"]) as string | undefined;
+				const char = (it["character"] ?? it["char"] ?? it["surface"]) as
+					| string
+					| undefined;
 				if (!char || typeof char !== "string") continue;
 				let freq: number | undefined = undefined;
 				// Look for keys that look like frequency per million first
 				const keys = Object.keys(it);
-				const perMillionKey = keys.find((k) => k.toLowerCase().includes("frequency") || k.toLowerCase().includes("ferquency"));
+				const perMillionKey = keys.find(
+					(k) =>
+						k.toLowerCase().includes("frequency") ||
+						k.toLowerCase().includes("ferquency")
+				);
 				if (perMillionKey && typeof it[perMillionKey] === "number") {
 					freq = it[perMillionKey] as number;
 				} else if (typeof it["token"] === "number") {
@@ -229,7 +253,10 @@ async function main() {
 						const entry = JSON.parse(line);
 						if (entry && entry.type === "char") {
 							const override = freqMap.get(entry.surface);
-							if (typeof override === "number" && Array.isArray(entry.readings)) {
+							if (
+								typeof override === "number" &&
+								Array.isArray(entry.readings)
+							) {
 								for (const r of entry.readings) r.freq = override;
 								changed++;
 							}
@@ -240,66 +267,95 @@ async function main() {
 					}
 				}
 				jsonlOutput = updated.join("\n");
-				console.log(`🎚️  Frequency overrides applied to ${changed} char entries.`);
+				logger.info(
+					`🎚️  Frequency overrides applied to ${changed} char entries.`
+				);
 			}
-		} else {
-			console.log(
+		} catch {
+			logger.info(
 				`ℹ️  Char frequency file not found, keeping original freqs: ${charFreqFile}`
 			);
 		}
 
-
 		// Apply sentiment-based register/POS updates (coarse then detailed)
-		const coarseSentPath = "data/sample/sentiment_dict/sentiment_dictionary.json";
-		const detailedSentPath = "data/sample/sentiment_dict/大連理工情感詞彙本體/sentiments.json";
-		let coarseMap = new Map<string, string>();
-		let detailedRegMap = new Map<string, string>();
-		let detailedPosMap = new Map<string, string>();
-		if (existsSync(coarseSentPath)) {
+		const coarseSentPath =
+			"data/sample/sentiment_dict/sentiment_dictionary.json";
+		const detailedSentPath =
+			"data/sample/sentiment_dict/大連理工情感詞彙本體/sentiments.json";
+		const coarseMap = new Map<string, string>();
+		const detailedRegMap = new Map<string, string>();
+		const detailedPosMap = new Map<string, string>();
+		try {
+			await Deno.stat(coarseSentPath);
 			try {
-				const raw = readFileSync(coarseSentPath, "utf-8");
+				const raw = await Deno.readTextFile(coarseSentPath);
 				const obj = JSON.parse(raw) as Record<string, string[]>;
 				for (const [k, arr] of Object.entries(obj)) {
 					const keyUpper = k.toUpperCase();
 					if (Array.isArray(arr)) {
 						for (const w of arr) {
-							if (typeof w === "string" && w.trim()) coarseMap.set(w.trim(), keyUpper);
+							if (typeof w === "string" && w.trim()) {
+								coarseMap.set(w.trim(), keyUpper);
+							}
 						}
 					}
 				}
-				console.log(`🧭 Loaded coarse sentiments for ${coarseMap.size} terms.`);
+				logger.info(`🧭 Loaded coarse sentiments for ${coarseMap.size} terms.`);
 			} catch {
-				console.warn(`⚠️  Failed to parse coarse sentiment dictionary at ${coarseSentPath}`);
+				logger.warn(
+					`⚠️  Failed to parse coarse sentiment dictionary at ${coarseSentPath}`
+				);
 			}
-		} else {
-			console.log(`ℹ️  Coarse sentiment dictionary not found: ${coarseSentPath}`);
+		} catch {
+			logger.info(
+				`ℹ️  Coarse sentiment dictionary not found: ${coarseSentPath}`
+			);
 		}
 
-		if (existsSync(detailedSentPath)) {
+		try {
+			await Deno.stat(detailedSentPath);
 			try {
-				const raw = readFileSync(detailedSentPath, "utf-8");
+				const raw = await Deno.readTextFile(detailedSentPath);
 				const arr = JSON.parse(raw) as Array<Record<string, any>>;
 				for (const it of arr) {
 					if (!it) continue;
-					const w = (it["詞語"] ?? it["word"] ?? it["surface"]) as string | undefined;
+					const w = (it["詞語"] ?? it["word"] ?? it["surface"]) as
+						| string
+						| undefined;
 					if (typeof w !== "string" || !w.trim()) continue;
 					const reg = (it["情感分類"] ?? it["register"]) as string | undefined;
 					const pos = (it["詞性種類"] ?? it["pos"]) as string | undefined;
-					if (typeof reg === "string" && reg.trim()) detailedRegMap.set(w.trim(), reg.trim().toUpperCase());
-					if (typeof pos === "string" && pos.trim()) detailedPosMap.set(w.trim(), pos.trim().toUpperCase());
+					if (typeof reg === "string" && reg.trim()) {
+						detailedRegMap.set(w.trim(), reg.trim().toUpperCase());
+					}
+					if (typeof pos === "string" && pos.trim()) {
+						detailedPosMap.set(w.trim(), pos.trim().toUpperCase());
+					}
 				}
-				console.log(`🧭 Loaded detailed sentiments for ${detailedRegMap.size} terms; POS for ${detailedPosMap.size}.`);
+				logger.info(
+					`🧭 Loaded detailed sentiments for ${detailedRegMap.size} terms; POS for ${detailedPosMap.size}.`
+				);
 			} catch {
-				console.warn(`⚠️  Failed to parse detailed sentiment dictionary at ${detailedSentPath}`);
+				logger.warn(
+					`⚠️  Failed to parse detailed sentiment dictionary at ${detailedSentPath}`
+				);
 			}
-		} else {
-			console.log(`ℹ️  Detailed sentiment dictionary not found: ${detailedSentPath}`);
+		} catch {
+			logger.info(
+				`ℹ️  Detailed sentiment dictionary not found: ${detailedSentPath}`
+			);
 		}
 
-		if (coarseMap.size > 0 || detailedRegMap.size > 0 || detailedPosMap.size > 0) {
+		if (
+			coarseMap.size > 0 ||
+			detailedRegMap.size > 0 ||
+			detailedPosMap.size > 0
+		) {
 			const lines = jsonlOutput.split("\n").filter(Boolean);
 			const updated: string[] = [];
-			let coarseApplied = 0, regReplaced = 0, posReplaced = 0;
+			let coarseApplied = 0,
+				regReplaced = 0,
+				posReplaced = 0;
 			for (const line of lines) {
 				try {
 					const entry = JSON.parse(line);
@@ -327,24 +383,30 @@ async function main() {
 				}
 			}
 			jsonlOutput = updated.join("\n");
-			console.log(`🧾 Sentiment updates -> coarse: ${coarseApplied}, detailed register: ${regReplaced}, POS: ${posReplaced}`);
+			logger.info(
+				`🧾 Sentiment updates -> coarse: ${coarseApplied}, detailed register: ${regReplaced}, POS: ${posReplaced}`
+			);
 		}
 
 		// Ensure output directory exists
-		mkdirSync(dirname(outputFile), { recursive: true });
+		try {
+			await Deno.stat(dirname(outputFile));
+		} catch {
+			await Deno.mkdir(dirname(outputFile), { recursive: true });
+		}
 
 		// Write to output file
-		writeFileSync(outputFile, jsonlOutput, "utf-8");
+		await Deno.writeTextFile(outputFile, jsonlOutput);
 
-		console.log(`✅ Normalized data written to: ${outputFile}`);
+		logger.info(`✅ Normalized data written to: ${outputFile}`);
 		const outLines = jsonlOutput.split("\n").filter(Boolean);
-		console.log(`📊 Generated ${outLines.length} entries`);
+		logger.info(`📊 Generated ${outLines.length} entries`);
 
 		// Show sample output
-		console.log("\n📋 Sample normalized entries:");
+		logger.info("\n📋 Sample normalized entries:");
 		outLines.slice(0, 5).forEach((line, index) => {
 			const entry = JSON.parse(line);
-			console.log(
+			logger.info(
 				`${index + 1}. ${entry.surface} (${entry.type}, ${entry.lang}) - ${
 					entry.readings.length
 				} reading(s)`
@@ -352,7 +414,7 @@ async function main() {
 		});
 
 		if (outLines.length > 5) {
-			console.log(`... and ${outLines.length - 5} more entries`);
+			logger.info(`... and ${outLines.length - 5} more entries`);
 		}
 
 		// Show statistics
@@ -363,18 +425,18 @@ async function main() {
 		const zhTWEntries = entries.filter((e: any) => e.lang === "zh-TW").length;
 		const miscEntries = entries.filter((e: any) => e.lang === "misc").length;
 
-		console.log("\n📈 Statistics:");
-		console.log(`   Characters: ${charEntries}`);
-		console.log(`   Vocabulary: ${vocabEntries}`);
-		console.log(`   Chinese (zh-HK): ${zhHKEntries}`);
-		console.log(`   Chinese (zh-TW): ${zhTWEntries}`);
-		console.log(`   Miscellaneous: ${miscEntries}`);
+		logger.info("\n📈 Statistics:");
+		logger.info(`   Characters: ${charEntries}`);
+		logger.info(`   Vocabulary: ${vocabEntries}`);
+		logger.info(`   Chinese (zh-HK): ${zhHKEntries}`);
+		logger.info(`   Chinese (zh-TW): ${zhTWEntries}`);
+		logger.info(`   Miscellaneous: ${miscEntries}`);
 	} catch (error) {
-		console.error("❌ Error normalizing charlist data:", error);
-		process.exit(1);
+		logger.error("❌ Error normalizing charlist data:", error);
+		Deno.exit(1);
 	}
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
 	main();
 }

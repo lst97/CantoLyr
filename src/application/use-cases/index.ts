@@ -1,4 +1,12 @@
 // Application use cases
-export { SearchUseCase, type SearchInput, type SearchOutput } from './SearchUseCase.js';
-export { ComposeLineUseCase, type ComposeLineInput, type ComposeLineOutput } from './ComposeLineUseCase.js';
-export { RecordFeedbackUseCase, type RecordFeedbackInput, type RecordFeedbackOutput } from './RecordFeedbackUseCase.js';
+export { type SearchInput, type SearchOutput, SearchUseCase } from "./SearchUseCase.ts";
+export {
+  type ComposeLineInput,
+  type ComposeLineOutput,
+  ComposeLineUseCase,
+} from "./ComposeLineUseCase.ts";
+export {
+  type RecordFeedbackInput,
+  type RecordFeedbackOutput,
+  RecordFeedbackUseCase,
+} from "./RecordFeedbackUseCase.ts";

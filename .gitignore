@@ -70,3 +70,4 @@ prisma/migrations/
 
 # Chroma
 .cache/
+prisma/generated/

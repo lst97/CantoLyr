@@ -2,9 +2,12 @@
  * Utilities for normalizing wordslist data to JSONL format
  */
 
-import { normalizeJyutping } from "./jyutping.js";
-import { readFileSync } from "fs";
-import path from "path";
+import { normalizeJyutping } from "./jyutping.ts";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 /**
  * Raw wordslist data structure - maps words to arrays of jyutping pronunciations
@@ -108,7 +111,7 @@ export function normalizeWordslistData(
 					seen.add(sig);
 				}
 			} catch (error) {
-				console.warn(
+				logger.warn(
 					`Failed to normalize reading "${jyutping}" for word "${word}":`,
 					error
 				);
@@ -170,8 +173,9 @@ function determineLanguage(word: string): string {
 		/[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf]/.test(
 			word
 		)
-	)
+	) {
 		return "zh-HK";
+	}
 	// Fallback
 	return "misc";
 }
@@ -270,7 +274,7 @@ let CANTONESE_TABLE: CantonesePinyinTable | null = null;
 function loadCantoneseTable(): CantonesePinyinTable {
 	if (CANTONESE_TABLE) return CANTONESE_TABLE;
 	const tablePath = path.resolve(
-		process.cwd(),
+		Deno.cwd(),
 		"data/sample/cantonese_pinyin_table.json"
 	);
 	const raw = readFileSync(tablePath, "utf-8");

@@ -1,5 +1,5 @@
-import type { WriteRepo, SelectionInput } from '../ports/WriteRepo.js';
-import type { ReadingRepo } from '../ports/ReadingRepo.js';
+import type { SelectionInput, WriteRepo } from "../ports/WriteRepo.ts";
+import type { ReadingRepo } from "../ports/ReadingRepo.ts";
 
 /**
  * Input for record feedback use case
@@ -58,7 +58,7 @@ export interface RecordFeedbackOutput {
 export class RecordFeedbackUseCase {
   constructor(
     private readonly writeRepo: WriteRepo,
-    private readonly readingRepo: ReadingRepo
+    private readonly readingRepo: ReadingRepo,
   ) {}
 
   /**
@@ -67,10 +67,10 @@ export class RecordFeedbackUseCase {
    */
   async execute(input: RecordFeedbackInput): Promise<RecordFeedbackOutput> {
     const startTime = Date.now();
-    
+
     // Validate input
     this.validateInput(input);
-    
+
     // Verify reading exists
     const reading = await this.readingRepo.getById(input.readingId);
     if (!reading) {
@@ -89,9 +89,9 @@ export class RecordFeedbackUseCase {
       ...(input.context && {
         context: {
           ...input.context,
-          recordedAt: new Date().toISOString()
-        }
-      })
+          recordedAt: new Date().toISOString(),
+        },
+      }),
     };
 
     // Record the selection
@@ -103,8 +103,8 @@ export class RecordFeedbackUseCase {
       sessionId,
       validation: {
         readingExists: true,
-        readingSurface: reading.surface
-      }
+        readingSurface: reading.surface,
+      },
     };
   }
 
@@ -113,24 +113,27 @@ export class RecordFeedbackUseCase {
    */
   private validateInput(input: RecordFeedbackInput): void {
     if (!input.readingId) {
-      throw new Error('Reading ID is required');
+      throw new Error("Reading ID is required");
     }
 
-    if (typeof input.accepted !== 'boolean') {
-      throw new Error('Accepted status must be a boolean');
+    if (typeof input.accepted !== "boolean") {
+      throw new Error("Accepted status must be a boolean");
     }
 
     // Validate session ID format if provided
     if (input.sessionId && !/^[a-zA-Z0-9_-]+$/.test(input.sessionId)) {
-      throw new Error('Session ID must contain only alphanumeric characters, underscores, and hyphens');
+      throw new Error(
+        "Session ID must contain only alphanumeric characters, underscores, and hyphens",
+      );
     }
 
     // Validate context if provided
     if (input.context) {
       // Ensure context is not too large (prevent abuse)
       const contextStr = JSON.stringify(input.context);
-      if (contextStr.length > 10000) { // 10KB limit
-        throw new Error('Context data is too large (max 10KB)');
+      if (contextStr.length > 10000) {
+        // 10KB limit
+        throw new Error("Context data is too large (max 10KB)");
       }
     }
   }
@@ -148,34 +151,36 @@ export class RecordFeedbackUseCase {
    * Batch record multiple feedback entries
    * Useful for recording feedback for an entire composed line
    */
-  async executeBatch(inputs: RecordFeedbackInput[]): Promise<RecordFeedbackOutput[]> {
+  async executeBatch(
+    inputs: RecordFeedbackInput[],
+  ): Promise<RecordFeedbackOutput[]> {
     if (inputs.length === 0) {
       return [];
     }
 
     // Use the same session ID for all entries if not specified
     const batchSessionId = inputs[0]?.sessionId ?? this.generateSessionId();
-    
+
     const results: RecordFeedbackOutput[] = [];
-    
+
     for (const input of inputs) {
       try {
         const inputWithSession = {
           ...input,
-          sessionId: input.sessionId ?? batchSessionId
+          sessionId: input.sessionId ?? batchSessionId,
         };
-        
+
         const result = await this.execute(inputWithSession);
         results.push(result);
-      } catch (error) {
+      } catch {
         // Continue processing other entries even if one fails
         results.push({
           success: false,
           processingTimeMs: 0,
           sessionId: batchSessionId,
           validation: {
-            readingExists: false
-          }
+            readingExists: false,
+          },
         });
       }
     }

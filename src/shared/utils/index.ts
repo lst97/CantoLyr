@@ -1,40 +1,29 @@
-export { 
-  extractTones, 
-  countSyllables, 
-  isValidJyutping, 
-  normalizeJyutping 
-} from './jyutping.js';
+export { countSyllables, extractTones, isValidJyutping, normalizeJyutping } from "./jyutping.js";
 
 export {
-  normalizeCharlistData,
-  entriesToJSONL,
-  processCharlistToJSONL,
   type CharlistData,
-} from './charlistNormalizer.js';
+  entriesToJSONL,
+  normalizeCharlistData,
+  processCharlistToJSONL,
+} from "./charlistNormalizer.js";
+
+export { type NormalizedEntry, type NormalizedReading } from "../types/data.ts";
 
 export {
-  type NormalizedReading,
-  type NormalizedEntry
-} from '../types/data.js';
-
-export {
-  normalizeWordslistData,
   entriesToJSONL as wordslistEntriesToJSONL,
+  normalizeWordslistData,
   processWordslistToJSONL,
   type WordslistData,
+  type WordslistEntry,
   type WordslistReading,
-  type WordslistEntry
-} from './wordslistNormalizer.js';
+} from "./wordslistNormalizer.js";
+
+export { createJsonlParser, JsonlParser } from "./jsonlParser.ts";
 
 export {
-  JsonlParser,
-  createJsonlParser
-} from './jsonlParser.js';
-
-export {
-  DatabaseSeeder,
   createDatabaseSeeder,
+  DatabaseSeeder,
   DEFAULT_SEED_CONFIG,
   type SeedConfig,
-  type SeedResult
-} from './databaseSeeder.js';
+  type SeedResult,
+} from "./databaseSeeder.js";

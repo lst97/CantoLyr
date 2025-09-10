@@ -1,5 +1,3 @@
-#!/usr/bin/env tsx
-
 /**
  * Normalize JSONL (chars + vocab) into Chroma-ready documents.
  *
@@ -20,8 +18,10 @@
  *  }
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { dirname } from "jsr:@std/path";
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 type Reading = {
 	jyutping?: string[]; // tokens
@@ -44,9 +44,13 @@ type NormalizedLine = {
 	readings?: Reading[];
 };
 
-function ensureDirFor(filePath: string) {
+async function ensureDirFor(filePath: string) {
 	const dir = dirname(filePath);
-	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+	try {
+		await Deno.stat(dir);
+	} catch {
+		await Deno.mkdir(dir, { recursive: true });
+	}
 }
 
 function sanitizeForId(s: string | undefined): string {
@@ -112,7 +116,9 @@ function toChromaJSONLines(
 				pronunciation: r.pronunciation ?? "",
 				tone: r.tone ?? "",
 				// No arrays in metadata (Chroma restriction); keep stringified variants
-				consonantsStr: Array.isArray(r.consonants) ? r.consonants.join(" ") : "",
+				consonantsStr: Array.isArray(r.consonants)
+					? r.consonants.join(" ")
+					: "",
 				rhymesStr: Array.isArray(r.rhymes) ? r.rhymes.join(" ") : "",
 				syllables: r.syllables,
 				pos: r.pos ?? "",
@@ -138,69 +144,74 @@ function toChromaJSONLines(
 }
 
 async function main() {
-	const charsIn = process.argv[2] || "data/normalized/normalized-chars.jsonl";
-	const vocabIn = process.argv[3] || "data/normalized/normalized-vocab.jsonl";
-	const charsOut = process.argv[4] || "data/vector/chroma-chars.jsonl";
-	const vocabOut = process.argv[5] || "data/vector/chroma-vocab.jsonl";
-	const allOut = process.argv[6] || "data/vector/chroma-all.jsonl";
+	const args = Deno.args;
+	const charsIn = args[0] || "data/normalized/normalized-chars.jsonl";
+	const vocabIn = args[1] || "data/normalized/normalized-vocab.jsonl";
+	const charsOut = args[2] || "data/vector/chroma-chars.jsonl";
+	const vocabOut = args[3] || "data/vector/chroma-vocab.jsonl";
+	const allOut = args[4] || "data/vector/chroma-all.jsonl";
 
-	if (!existsSync(charsIn)) {
-		console.error(`❌ Missing input file: ${charsIn}`);
-		process.exit(1);
+	try {
+		await Deno.stat(charsIn);
+	} catch {
+		logger.error(`❌ Missing input file: ${charsIn}`);
+		Deno.exit(1);
 	}
-	if (!existsSync(vocabIn)) {
-		console.error(`❌ Missing input file: ${vocabIn}`);
-		process.exit(1);
+	try {
+		await Deno.stat(vocabIn);
+	} catch {
+		logger.error(`❌ Missing input file: ${vocabIn}`);
+		Deno.exit(1);
 	}
 
-	console.log(`🔄 Reading: ${charsIn}`);
-	const charsRaw = readFileSync(charsIn, "utf-8");
-	console.log(`🔄 Reading: ${vocabIn}`);
-	const vocabRaw = readFileSync(vocabIn, "utf-8");
+	logger.info(`🔄 Reading: ${charsIn}`);
+	const charsRaw = await Deno.readTextFile(charsIn);
+	logger.info(`🔄 Reading: ${vocabIn}`);
+	const vocabRaw = await Deno.readTextFile(vocabIn);
 
-	console.log(`🧪 Converting chars -> Chroma JSONL`);
+	logger.info(`🧪 Converting chars -> Chroma JSONL`);
 	const producedIds = new Set<string>();
 	const charsChroma = toChromaJSONLines(charsRaw, "char", producedIds);
 
-	console.log(`🧪 Converting vocab -> Chroma JSONL`);
+	logger.info(`🧪 Converting vocab -> Chroma JSONL`);
 	const vocabChroma = toChromaJSONLines(vocabRaw, "vocab", producedIds);
 
-	ensureDirFor(charsOut);
-	ensureDirFor(vocabOut);
-	ensureDirFor(allOut);
+	await ensureDirFor(charsOut);
+	await ensureDirFor(vocabOut);
+	await ensureDirFor(allOut);
 
-	writeFileSync(charsOut, charsChroma + (charsChroma ? "\n" : ""), "utf-8");
-	console.log(
+	await Deno.writeTextFile(charsOut, charsChroma + (charsChroma ? "\n" : ""));
+	logger.info(
 		`✅ Wrote ${charsOut} (${
 			charsChroma.split(/\n/).filter(Boolean).length
 		} lines)`
 	);
 
-	writeFileSync(vocabOut, vocabChroma + (vocabChroma ? "\n" : ""), "utf-8");
-	console.log(
+	await Deno.writeTextFile(vocabOut, vocabChroma + (vocabChroma ? "\n" : ""));
+	logger.info(
 		`✅ Wrote ${vocabOut} (${
 			vocabChroma.split(/\n/).filter(Boolean).length
 		} lines)`
 	);
 
 	const merged = [charsChroma, vocabChroma].filter(Boolean).join("\n");
-	writeFileSync(allOut, merged + (merged ? "\n" : ""), "utf-8");
-	console.log(
+	await Deno.writeTextFile(allOut, merged + (merged ? "\n" : ""));
+	logger.info(
 		`✅ Wrote ${allOut} (${merged.split(/\n/).filter(Boolean).length} lines)`
 	);
 
 	// Show a few samples
 	const show = (label: string, s: string) => {
 		const lines = s.split(/\n/).filter(Boolean);
-		console.log(`\n📋 Sample (${label}):`);
+		logger.info(`\n📋 Sample (${label}):`);
 		for (const [i, line] of lines.slice(0, 3).entries()) {
 			try {
 				const j = JSON.parse(line);
-				console.log(
+				logger.info(
 					`${i + 1}. id=${j.id} document=${j.document.substring(0, 80)}…`
 				);
 			} catch {
-				console.log(`${i + 1}. ${line.substring(0, 80)}…`);
+				logger.info(`${i + 1}. ${line.substring(0, 80)}…`);
 			}
 		}
 	};
@@ -208,6 +219,6 @@ async function main() {
 	show("vocab", vocabChroma);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
 	main();
 }

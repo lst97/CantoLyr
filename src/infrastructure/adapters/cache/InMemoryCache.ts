@@ -1,4 +1,5 @@
-import { Cache, CacheOptions, CacheStats } from '../../../application/ports/Cache.js';
+// deno-lint-ignore-file require-await
+import { Cache, CacheOptions, CacheStats } from "../../../application/ports/Cache.ts";
 
 /**
  * Cache entry with expiration timestamp
@@ -44,7 +45,7 @@ export class InMemoryCache implements Cache {
     }
 
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       if (this.options.enableStats) {
         this.stats.misses++;
@@ -74,7 +75,7 @@ export class InMemoryCache implements Cache {
 
   async set<T>(key: string, value: T, ttlSec?: number): Promise<void> {
     const ttl = ttlSec ?? this.options.defaultTtl;
-    const expiresAt = Date.now() + (ttl * 1000);
+    const expiresAt = Date.now() + ttl * 1000;
 
     // Enforce max size by removing oldest entries
     if (this.cache.size >= this.options.maxSize && !this.cache.has(key)) {
@@ -91,7 +92,7 @@ export class InMemoryCache implements Cache {
 
   async delete(key: string): Promise<boolean> {
     const deleted = this.cache.delete(key);
-    
+
     if (this.options.enableStats && deleted) {
       this.stats.deletes++;
       this.stats.size = this.cache.size;
@@ -102,7 +103,7 @@ export class InMemoryCache implements Cache {
 
   async deleteMany(keys: string[]): Promise<number> {
     let deletedCount = 0;
-    
+
     for (const key of keys) {
       if (this.cache.delete(key)) {
         deletedCount++;
@@ -120,7 +121,7 @@ export class InMemoryCache implements Cache {
   async clear(): Promise<void> {
     const size = this.cache.size;
     this.cache.clear();
-    
+
     if (this.options.enableStats) {
       this.stats.deletes += size;
       this.stats.size = 0;
@@ -129,7 +130,7 @@ export class InMemoryCache implements Cache {
 
   async has(key: string): Promise<boolean> {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return false;
     }
@@ -168,29 +169,27 @@ export class InMemoryCache implements Cache {
 
   async keys(pattern?: string): Promise<string[]> {
     const allKeys = Array.from(this.cache.keys());
-    
+
     if (!pattern) {
       return allKeys;
     }
 
     // Convert glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
+    const regexPattern = pattern.replace(/\*/g, ".*").replace(/\?/g, ".");
     const regex = new RegExp(`^${regexPattern}$`);
 
-    return allKeys.filter(key => regex.test(key));
+    return allKeys.filter((key) => regex.test(key));
   }
 
   async ttl(key: string): Promise<number> {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return -1; // Key doesn't exist
     }
 
     const remainingMs = entry.expiresAt - Date.now();
-    
+
     if (remainingMs <= 0) {
       // Key has expired, remove it
       this.cache.delete(key);
@@ -213,26 +212,28 @@ export class InMemoryCache implements Cache {
     limit?: number;
   }): string {
     const parts = [
-      'search',
+      "search",
       query.v,
-      query.mode || 'all',
-      query.prefix ? 'prefix' : 'exact',
-      query.limit?.toString() || 'default'
+      query.mode || "all",
+      query.prefix ? "prefix" : "exact",
+      query.limit?.toString() || "default",
     ];
-    return parts.join(':');
+    return parts.join(":");
   }
 
   /**
    * Generate cache key for compose queries
    */
   static generateComposeKey(toneMap: string, topK?: number): string {
-    return `compose:${toneMap}:${topK || 'default'}`;
+    return `compose:${toneMap}:${topK || "default"}`;
   }
 
   /**
    * Warm cache with frequently accessed data
    */
-  async warmCache(warmupData: Array<{ key: string; value: any; ttl?: number }>): Promise<void> {
+  async warmCache(
+    warmupData: Array<{ key: string; value: any; ttl?: number }>,
+  ): Promise<void> {
     for (const item of warmupData) {
       await this.set(item.key, item.value, item.ttl);
     }

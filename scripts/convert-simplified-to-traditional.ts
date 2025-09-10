@@ -1,30 +1,27 @@
-import { promises as fs } from "fs";
-import path from "path";
-import process from "process";
-// @ts-ignore Ignore the type error for chinese-conv, no types are provided
-import chineseConv from "chinese-conv";
+import { basename, dirname, join, resolve } from "jsr:@std/path";
+import * as OpenCC from "opencc-js";
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 async function convertFile(inputPath: string, outputPath?: string) {
-	const absIn = path.resolve(inputPath);
-	const raw = await fs.readFile(absIn, "utf8");
+	const absIn = resolve(inputPath);
+	const raw = await Deno.readTextFile(absIn);
 
-	// Convert entire file text to Traditional Chinese.
-	// This avoids assumptions about JSON structure while preserving formatting.
-	const converted = chineseConv.tify(raw);
+	// Initialize the converter for Simplified Chinese to Traditional Chinese (s2t.json).
+	const converter = OpenCC.Converter({ from: "cn", to: "hk" });
+	const converted = converter(raw);
 
 	const outPath = outputPath
-		? path.resolve(outputPath)
-		: path.join(
-				path.dirname(absIn),
-				path.basename(absIn).replace(/\.json$/i, ".json")
-		  );
+		? resolve(outputPath)
+		: join(dirname(absIn), basename(absIn).replace(/\.json$/i, ".json"));
 
-	await fs.writeFile(outPath, converted, "utf8");
+	await Deno.writeTextFile(outPath, converted);
 	return { in: absIn, out: outPath };
 }
 
 async function main() {
-	const argv = process.argv.slice(2);
+	const argv = [...Deno.args];
 	const inPlace = argv.includes("--in-place") || argv.includes("-i");
 	const args = argv.filter((a) => !a.startsWith("-"));
 
@@ -43,11 +40,13 @@ async function main() {
 	}
 
 	for (const r of results) {
-		console.log(`Converted: ${r.in} -> ${r.out}`);
+		logger.info(`Converted: ${r.in} -> ${r.out}`);
 	}
 }
 
-main().catch((err) => {
-	console.error("Conversion failed:", err);
-	process.exit(1);
-});
+if (import.meta.main) {
+	main().catch((err) => {
+		logger.error("Conversion failed:", err);
+		Deno.exit(1);
+	});
+}

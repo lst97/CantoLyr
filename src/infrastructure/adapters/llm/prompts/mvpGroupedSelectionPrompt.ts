@@ -1,4 +1,4 @@
-import type { Group } from "../../../../application/services/mvpPrefilter.js";
+import type { Group } from "../../../../application/services/mvpPrefilter.ts";
 
 type PromptOptions = {
   theme?: string;
@@ -15,7 +15,7 @@ type PromptOptions = {
  */
 export function buildMvpGroupedSelectionPrompt(
   groups: Group[],
-  opts: PromptOptions = {}
+  opts: PromptOptions = {},
 ): string {
   const { theme, mood, genre, language } = opts;
 
@@ -42,7 +42,8 @@ export function buildMvpGroupedSelectionPrompt(
     })
     .join("\n");
 
-  const outputSpec = `\n\nOutput JSON only (no prose):\n{\n  "selections": [\n    {"group": 1, "option": <number>},\n    {"group": 2, "option": <number>},\n    ...\n  ],\n  "line": "<concatenation of chosen options in order>",\n  "reason": "<brief rationale>"\n}`;
+  const outputSpec =
+    `\n\nOutput JSON only (no prose):\n{\n  "selections": [\n    {"group": 1, "option": <number>},\n    {"group": 2, "option": <number>},\n    ...\n  ],\n  "line": "<concatenation of chosen options in order>",\n  "reason": "<brief rationale>"\n}`;
 
   return `${header}\n\n${groupsText}${outputSpec}`;
 }
