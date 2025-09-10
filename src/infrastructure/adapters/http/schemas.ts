@@ -4,13 +4,13 @@ export const SearchPronunciationQuerySchema = z.object({
 	p: z.string().min(1, "p is required"),
 	mode: z.enum(["all", "vocab", "char"]).optional(),
 	prefix: z.coerce.boolean().optional(),
-	limit: z.coerce.number().int().min(1).max(1000).optional(),
+	limit: z.coerce.number().int().min(1).max(20480).optional(),
 });
 
 export const SearchRhymeQuerySchema = z.object({
 	r: z.string().min(1, "rhyme is required"),
 	mode: z.enum(["all", "vocab", "char"]).optional(),
-	limit: z.coerce.number().int().min(1).max(1000).optional(),
+	limit: z.coerce.number().int().min(1).max(20480).optional(),
 });
 
 export const ReadingItemSchema = z.object({

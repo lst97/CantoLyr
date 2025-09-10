@@ -1,3 +1,4 @@
+// deno-lint-ignore-file require-await
 import { Cache, CacheOptions, CacheStats } from "../../../application/ports/Cache.ts";
 
 /**
@@ -74,7 +75,7 @@ export class InMemoryCache implements Cache {
 
   async set<T>(key: string, value: T, ttlSec?: number): Promise<void> {
     const ttl = ttlSec ?? this.options.defaultTtl;
-    const expiresAt = Date.now() + (ttl * 1000);
+    const expiresAt = Date.now() + ttl * 1000;
 
     // Enforce max size by removing oldest entries
     if (this.cache.size >= this.options.maxSize && !this.cache.has(key)) {
@@ -174,9 +175,7 @@ export class InMemoryCache implements Cache {
     }
 
     // Convert glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\*/g, ".*")
-      .replace(/\?/g, ".");
+    const regexPattern = pattern.replace(/\*/g, ".*").replace(/\?/g, ".");
     const regex = new RegExp(`^${regexPattern}$`);
 
     return allKeys.filter((key) => regex.test(key));
@@ -232,7 +231,9 @@ export class InMemoryCache implements Cache {
   /**
    * Warm cache with frequently accessed data
    */
-  async warmCache(warmupData: Array<{ key: string; value: any; ttl?: number }>): Promise<void> {
+  async warmCache(
+    warmupData: Array<{ key: string; value: any; ttl?: number }>,
+  ): Promise<void> {
     for (const item of warmupData) {
       await this.set(item.key, item.value, item.ttl);
     }

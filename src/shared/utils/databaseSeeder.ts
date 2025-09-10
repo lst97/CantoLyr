@@ -5,6 +5,9 @@
 import { PrismaClient } from "../../../prisma/generated/client.ts";
 import { createJsonlParser } from "./jsonlParser.ts";
 import type { NormalizedEntry, ParseStats } from "../types/data.ts";
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 /**
  * Configuration for database seeding
@@ -20,7 +23,7 @@ export interface SeedConfig {
  * Default seeding configuration
  */
 export const DEFAULT_SEED_CONFIG: SeedConfig = {
-	batchSize: 1000,
+	batchSize: 2048,
 	maxRetries: 3,
 	retryDelayMs: 1000,
 	logProgress: true,
@@ -66,7 +69,7 @@ export class DatabaseSeeder {
 		let batch: NormalizedEntry[] = [];
 
 		if (this.config.logProgress) {
-			console.log(`Starting to seed from file: ${filePath}`);
+			logger.info(`Starting to seed from file: ${filePath}`);
 		}
 
 		try {
@@ -82,7 +85,7 @@ export class DatabaseSeeder {
 						insertedReadings += batchResult.readings;
 
 						if (this.config.logProgress) {
-							console.log(
+							logger.info(
 								`Processed batch: ${insertedEntries} entries, ${insertedReadings} readings`
 							);
 						}
@@ -101,7 +104,7 @@ export class DatabaseSeeder {
 				insertedReadings += batchResult.readings;
 
 				if (this.config.logProgress) {
-					console.log(
+					logger.info(
 						`Processed final batch: ${insertedEntries} entries, ${insertedReadings} readings`
 					);
 				}
@@ -113,11 +116,11 @@ export class DatabaseSeeder {
 			const duration = Date.now() - startTime;
 
 			if (this.config.logProgress) {
-				console.log(`Seeding completed in ${duration}ms`);
-				console.log(
+				logger.info(`Seeding completed in ${duration}ms`);
+				logger.info(
 					`Inserted: ${insertedEntries} entries, ${insertedReadings} readings`
 				);
-				console.log(`Parse errors: ${parseStats.failedEntries}`);
+				logger.info(`Parse errors: ${parseStats.failedEntries}`);
 			}
 
 			return {
@@ -217,13 +220,13 @@ export class DatabaseSeeder {
 			} catch (error) {
 				attempt++;
 				const message = error instanceof Error ? error.message : String(error);
-				console.error(
+				logger.error(
 					`❌ Batch insertion failed (attempt ${attempt}): ${message}`
 				);
 				// Log a small sample of the batch to help debugging
 				try {
 					const sample = entries.slice(0, 1)[0];
-					console.error("   ↳ Sample entry:", JSON.stringify(sample));
+					logger.error("   ↳ Sample entry:", JSON.stringify(sample));
 				} catch {
 					// ignore
 				}
@@ -240,7 +243,7 @@ export class DatabaseSeeder {
 				);
 
 				if (this.config.logProgress) {
-					console.log(
+					logger.info(
 						`Retrying batch insertion (attempt ${attempt + 1}/${
 							this.config.maxRetries
 						})`
@@ -259,7 +262,7 @@ export class DatabaseSeeder {
 	 */
 	async clearDatabase(): Promise<{ entries: number; readings: number }> {
 		if (this.config.logProgress) {
-			console.log("Clearing database...");
+			logger.info("Clearing database...");
 		}
 
 		return await this.prisma.$transaction(async (tx) => {
@@ -270,7 +273,7 @@ export class DatabaseSeeder {
 			const deletedEntries = await tx.entry.deleteMany();
 
 			if (this.config.logProgress) {
-				console.log(
+				logger.info(
 					`Cleared: ${deletedEntries.count} entries, ${deletedReadings.count} readings`
 				);
 			}

@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 // Schemas remain the same as they are framework-agnostic
 const DatabaseConfigSchema = z.object({
@@ -97,7 +100,7 @@ export function getConfig(): AppConfig {
 	const result = AppConfigSchema.safeParse(config);
 	if (!result.success) {
 		// Using console here since logger may not be initialized yet
-		console.error(
+		logger.error(
 			"❌ Invalid application configuration:",
 			result.error.flatten()
 		);

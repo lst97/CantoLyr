@@ -131,7 +131,8 @@ export class RecordFeedbackUseCase {
     if (input.context) {
       // Ensure context is not too large (prevent abuse)
       const contextStr = JSON.stringify(input.context);
-      if (contextStr.length > 10000) { // 10KB limit
+      if (contextStr.length > 10000) {
+        // 10KB limit
         throw new Error("Context data is too large (max 10KB)");
       }
     }
@@ -150,7 +151,9 @@ export class RecordFeedbackUseCase {
    * Batch record multiple feedback entries
    * Useful for recording feedback for an entire composed line
    */
-  async executeBatch(inputs: RecordFeedbackInput[]): Promise<RecordFeedbackOutput[]> {
+  async executeBatch(
+    inputs: RecordFeedbackInput[],
+  ): Promise<RecordFeedbackOutput[]> {
     if (inputs.length === 0) {
       return [];
     }
@@ -169,7 +172,7 @@ export class RecordFeedbackUseCase {
 
         const result = await this.execute(inputWithSession);
         results.push(result);
-      } catch (error) {
+      } catch {
         // Continue processing other entries even if one fails
         results.push({
           success: false,

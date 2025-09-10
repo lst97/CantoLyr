@@ -1,6 +1,9 @@
-import { load } from "std/dotenv/mod.ts";
-import * as path from "std/path/mod.ts";
-import { exists } from "std/fs/exists.ts";
+import { load } from "jsr:@std/dotenv";
+import * as path from "jsr:@std/path";
+import { exists } from "jsr:@std/fs/exists";
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 /**
  * Deno-native proxy script: delegates Chroma ingestion to Python.
@@ -12,8 +15,8 @@ async function run(cmd: string, args: string[]): Promise<number> {
     stdout: "inherit",
     stderr: "inherit",
   });
-  const status = await command.spawn().status;
-  return status.code;
+  const { code } = await command.output();
+  return code;
 }
 
 async function main() {
@@ -29,7 +32,7 @@ async function main() {
   const scriptPath = path.join(chromaDir, "ingest_chroma.py");
 
   if (!(await exists(scriptPath))) {
-    console.error(`❌ Python ingest script not found: ${scriptPath}`);
+    logger.error(`❌ Python ingest script not found: ${scriptPath}`);
     Deno.exit(1);
   }
 
@@ -39,24 +42,24 @@ async function main() {
     : path.join(venvDir, "bin", "python");
 
   if (!(await exists(venvPython))) {
-    console.error(
+    logger.error(
       `❌ Python virtual environment not found at ${venvDir}. Please run the setup script in the chroma directory.`,
     );
     Deno.exit(1);
   }
 
-  console.log(`🚀 Running ingest via venv: ${venvPython} ${scriptPath}`);
+  logger.info(`🚀 Running ingest via venv: ${venvPython} ${scriptPath}`);
   const code = await run(venvPython, [scriptPath, input, collection]);
   if (code !== 0) {
-    console.error(`❌ Python ingest exited with code ${code}`);
+    logger.error(`❌ Python ingest exited with code ${code}`);
     Deno.exit(code);
   }
-  console.log("✅ Ingestion complete.");
+  logger.info("✅ Ingestion complete.");
 }
 
 if (import.meta.main) {
   main().catch((err) => {
-    console.error("❌ An unexpected error occurred:", err);
+    logger.error("❌ An unexpected error occurred:", err);
     Deno.exit(1);
   });
 }

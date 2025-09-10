@@ -12,7 +12,7 @@ import {
 export class MvpPrefilterService implements PrefilterService {
   constructor() {}
 
-  async prefilterGroupsByTone(
+  prefilterGroupsByTone(
     tonePattern: string,
     fetchByTone: FetchByTone,
     maxPerGroup = 100,

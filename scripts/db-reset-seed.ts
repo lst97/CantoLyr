@@ -1,6 +1,9 @@
-import { load } from "std/dotenv/mod.ts";
-import { resolve } from "std/path/mod.ts";
+import { load } from "jsr:@std/dotenv";
+import { resolve } from "jsr:@std/path";
 import { PrismaClient } from "../prisma/generated/client.ts";
+import { getLogger } from "jsr:@std/log";
+
+const logger = getLogger();
 
 async function run(cmd: string, args: string[]) {
 	const p = new Deno.Command(cmd, {
@@ -16,7 +19,7 @@ async function main() {
 	await load({ export: true });
 	const databaseUrl = Deno.env.get("DATABASE_URL");
 	if (!databaseUrl) {
-		console.error(
+		logger.error(
 			"❌ DATABASE_URL is not set. Please export it before running."
 		);
 		Deno.exit(1);
@@ -27,18 +30,18 @@ async function main() {
 		const stat = await Deno.stat(sqlPath);
 		if (!stat.isFile) throw new Error("not a file");
 	} catch {
-		console.error(`❌ Cannot find ${sqlPath}`);
+		logger.error(`❌ Cannot find ${sqlPath}`);
 		Deno.exit(1);
 	}
 
-	console.log("🧹 Dropping + initializing schema from SQL...");
+	logger.info("🧹 Dropping + initializing schema from SQL...");
 	let appliedVia = "psql";
 	try {
 		await run("psql", ["-v", "ON_ERROR_STOP=1", databaseUrl, "-f", sqlPath]);
 	} catch (_e) {
 		let psqlWorked = false;
 		if (Deno.build.os === "darwin") {
-			console.warn(
+			logger.warn(
 				"⚠️  psql not in PATH, trying to find via 'brew --prefix libpq'..."
 			);
 			try {
@@ -56,20 +59,20 @@ async function main() {
 						sqlPath,
 					]);
 					psqlWorked = true;
-					console.log(`✅ Used ${psqlPath}`);
+					logger.info(`✅ Used ${psqlPath}`);
 				} else {
 					const error = new TextDecoder().decode(stderr);
-					console.warn(`   ↳ 'brew --prefix libpq' failed: ${error.trim()}`);
+					logger.warn(`   ↳ 'brew --prefix libpq' failed: ${error.trim()}`);
 				}
 			} catch (psqlErr) {
 				const msg =
 					psqlErr instanceof Error ? psqlErr.message : String(psqlErr);
-				console.warn(`   ↳ psql command failed: ${msg}`);
+				logger.warn(`   ↳ psql command failed: ${msg}`);
 			}
 		}
 
 		if (!psqlWorked) {
-			console.warn(
+			logger.warn(
 				"⚠️  psql not available. Falling back to Prisma raw execution..."
 			);
 			appliedVia = "prisma-raw";
@@ -85,13 +88,14 @@ async function main() {
 					.filter((s) => s.length > 0 && !s.startsWith("--"));
 				for (const stmt of statements) {
 					// Skip DB-level statements in fallback (often lack perms)
-					if (/^(CREATE\s+DATABASE|GRANT\s+ALL\s+PRIVILEGES)/i.test(stmt))
+					if (/^(CREATE\s+DATABASE|GRANT\s+ALL\s+PRIVILEGES)/i.test(stmt)) {
 						continue;
+					}
 					try {
 						await prisma.$executeRawUnsafe(stmt);
 					} catch (err) {
 						const msg = err instanceof Error ? err.message : String(err);
-						console.warn(`   ↳ Skipped: ${msg}`);
+						logger.warn(`   ↳ Skipped: ${msg}`);
 					}
 				}
 			} finally {
@@ -100,7 +104,7 @@ async function main() {
 		}
 	}
 
-	console.log("🔎 Verifying schema objects exist...");
+	logger.info("🔎 Verifying schema objects exist...");
 	const verifyClient = new PrismaClient({
 		datasources: { db: { url: databaseUrl } },
 	});
@@ -111,29 +115,29 @@ async function main() {
 		);
 		const ok = Array.isArray(res) && res[0] && (res[0] as any).exists === true;
 		if (!ok) {
-			console.warn(
+			logger.warn(
 				`⚠️  entries table not found after ${appliedVia}. Applying Prisma schema (db push)...`
 			);
 			await run("deno", ["run", "-A", "npm:prisma@latest", "db", "push"]);
 		} else {
-			console.log("✅ Schema verified.");
+			logger.info("✅ Schema verified.");
 		}
 	} finally {
 		await verifyClient.$disconnect();
 	}
 
-	console.log("🧩 Regenerating Prisma client...");
+	logger.info("🧩 Regenerating Prisma client...");
 	await run("deno", ["run", "-A", "npm:prisma@latest", "generate"]);
 
-	console.log("🌱 Normalizing and seeding database...");
+	logger.info("🌱 Normalizing and seeding database...");
 	await run("deno", ["run", "-A", "scripts/normalize-seed-db.ts"]);
 
-	console.log("✅ Done. Database reset, normalized, and seeded.");
+	logger.info("✅ Done. Database reset, normalized, and seeded.");
 }
 
 if (import.meta.main) {
 	main().catch((e) => {
-		console.error(e);
+		logger.error(e);
 		Deno.exit(1);
 	});
 }
