@@ -6,11 +6,13 @@ import { Logger } from "../logging/Logger.ts";
 import type { ReadingRepo } from "../../application/ports/ReadingRepo.ts";
 import type { WriteRepo } from "../../application/ports/WriteRepo.ts";
 import type { Cache } from "../../application/ports/Cache.ts";
+import type { LyricsRepo } from "../../application/ports/LyricsRepo.ts";
 import type { LlmGroupedSelector } from "../../application/ports/LlmGroupedSelector.ts";
 
 // Adapters
-import { PrismaReadingRepository } from "../adapters/database/PrismaReadingRepository.ts";
-import { PrismaWriteRepository } from "../adapters/database/PrismaWriteRepository.ts";
+import { LexiconReadRepository } from "../adapters/database/lexicon/LexiconReadRepository.ts";
+import { LexiconWriteRepository } from "../adapters/database/lexicon/LexiconWriteRepository.ts";
+import { LyricsReadRepository } from "../adapters/database/lyrics/LyricsReadRepository.ts";
 import { InMemoryCache } from "../adapters/cache/InMemoryCache.ts";
 import { GeminiLlmGroupedSelector } from "../adapters/llm/GeminiLlmGroupedSelector.ts";
 
@@ -35,6 +37,7 @@ export class Container {
     logger: Logger;
     readingRepo: ReadingRepo;
     writeRepo: WriteRepo;
+    lyricsRepo: LyricsRepo;
     cache: Cache;
     llmGroupedSelector: LlmGroupedSelector;
     searchUseCase: SearchUseCase;
@@ -51,14 +54,16 @@ export class Container {
       defaultTtl: this.config.cache.defaultTtl,
       maxSize: this.config.cache.maxSize,
     });
-    const readingRepo = new PrismaReadingRepository(this.prisma);
-    const writeRepo = new PrismaWriteRepository(this.prisma);
+  const readingRepo = new LexiconReadRepository(this.prisma);
+  const lyricsRepo = new LyricsReadRepository(this.prisma);
+    const writeRepo = new LexiconWriteRepository(this.prisma);
     const llmGroupedSelector = this.createLlmGroupedSelector();
 
     this.services = {
       logger,
       cache,
       readingRepo,
+  lyricsRepo,
       writeRepo,
       llmGroupedSelector,
       searchUseCase: new SearchUseCase(readingRepo, cache),

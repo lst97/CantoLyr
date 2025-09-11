@@ -1,80 +1,50 @@
-import { PrismaClient } from "../../../../prisma/generated/client.ts";
-import type { ReadingDTO, ReadingRepo } from "../../../application/ports/ReadingRepo.ts";
-import type { EntryType } from "../../../shared/types/common.ts";
+import { PrismaClient } from "../../../../../prisma/generated/client.ts";
+import { ReadingRepo, ReadingDTO } from "../../../../application/ports/ReadingRepo.ts";
+import { EntryType } from "../../../../shared/types/common.ts";
 
 /**
- * Prisma implementation of ReadingRepo for optimized search operations
+ * Prisma implementation of ReadingRepo for the Lexicon domain
  * Implements CQRS read side with tone-based search and deterministic ordering
  */
-export class PrismaReadingRepository implements ReadingRepo {
+export class LexiconReadRepository implements ReadingRepo {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * Get specific readings by their IDs
-   * Used for compose operations and feedback recording
-   */
   async getByIds(ids: bigint[]): Promise<ReadingDTO[]> {
-    if (ids.length === 0) {
-      return [];
-    }
+    if (ids.length === 0) return [];
 
     const readings = await this.prisma.reading.findMany({
-      where: {
-        id: { in: ids },
-      },
-      include: {
-        entry: true,
-      },
+      where: { id: { in: ids } },
+      include: { entry: true },
       orderBy: [
-        // Maintain deterministic ordering
         { entry: { type: "asc" } },
         { syllables: "asc" },
         { pronunciation: "asc" },
       ],
     });
-
     return readings.map(this.mapToDTO);
   }
 
-  /**
-   * Get a single reading by ID
-   * Returns null if not found
-   */
   async getById(id: bigint): Promise<ReadingDTO | null> {
     const reading = await this.prisma.reading.findUnique({
       where: { id },
-      include: {
-        entry: true,
-      },
+      include: { entry: true },
     });
-
     return reading ? this.mapToDTO(reading) : null;
   }
 
-  /**
-   * Count results by pronunciation (new mapped tone field)
-   */
   async countByPronunciation(query: {
     pronunciation: string;
     isPrefix?: boolean;
     entryType?: EntryType;
   }): Promise<number> {
     const { pronunciation, isPrefix = false, entryType } = query;
-    const pronunciationCondition = isPrefix
-      ? { startsWith: pronunciation }
-      : { equals: pronunciation };
+    const pronunciationCondition = isPrefix ? { startsWith: pronunciation } : { equals: pronunciation };
     const entryTypeCondition = entryType ? { type: entryType } : {};
     return await this.prisma.reading.count({
-      where: {
-        pronunciation: pronunciationCondition,
-        entry: entryTypeCondition,
-      },
+      where: { pronunciation: pronunciationCondition, entry: entryTypeCondition },
     });
   }
 
-  /**
-   * Search by new pronunciation column, with optional prefix
-   */
   async searchByPronunciation(query: {
     pronunciation: string;
     isPrefix?: boolean;
@@ -83,16 +53,11 @@ export class PrismaReadingRepository implements ReadingRepo {
     offset?: number;
   }): Promise<ReadingDTO[]> {
     const { pronunciation, isPrefix = false, entryType, limit = 50, offset = 0 } = query;
-    const pronunciationCondition = isPrefix
-      ? { startsWith: pronunciation }
-      : { equals: pronunciation };
+    const pronunciationCondition = isPrefix ? { startsWith: pronunciation } : { equals: pronunciation };
     const entryTypeCondition = entryType ? { type: entryType } : {};
 
     const readings = await this.prisma.reading.findMany({
-      where: {
-        pronunciation: pronunciationCondition,
-        entry: entryTypeCondition,
-      },
+      where: { pronunciation: pronunciationCondition, entry: entryTypeCondition },
       include: { entry: true },
       orderBy: [
         { entry: { type: "asc" } },
@@ -105,9 +70,6 @@ export class PrismaReadingRepository implements ReadingRepo {
     return readings.map(this.mapToDTO);
   }
 
-  /**
-   * Search by rhyme token contained in the rhymes array column
-   */
   async searchByRhyme(query: {
     rhyme: string;
     entryType?: EntryType;
@@ -118,10 +80,7 @@ export class PrismaReadingRepository implements ReadingRepo {
     const entryTypeCondition = entryType ? { type: entryType } : {};
 
     const readings = await this.prisma.reading.findMany({
-      where: {
-        rhymes: { has: rhyme },
-        entry: entryTypeCondition,
-      },
+      where: { rhymes: { has: rhyme }, entry: entryTypeCondition },
       include: { entry: true },
       orderBy: [
         { entry: { type: "asc" } },
@@ -134,9 +93,6 @@ export class PrismaReadingRepository implements ReadingRepo {
     return readings.map(this.mapToDTO);
   }
 
-  /**
-   * Maps Prisma reading result to ReadingDTO
-   */
   private mapToDTO(reading: any): ReadingDTO {
     return {
       id: reading.id,

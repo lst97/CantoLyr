@@ -73,3 +73,186 @@ model Feedback {
   @@index([createdAt])
   @@map("feedback")
 }
+
+// ------------------------------
+// Lyrics data model
+// ------------------------------
+
+model Song {
+  id        BigInt        @id @default(autoincrement())
+  docId     String        @unique
+  title     String
+  year      Int?
+  lyrics    LyricLine[]
+  artists   SongArtist[]
+  lyricists SongLyricist[]
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([docId])
+  @@map("songs")
+}
+
+model Artist {
+  id      BigInt       @id @default(autoincrement())
+  name    String       @unique
+  songs   SongArtist[]
+  createdAt DateTime   @default(now())
+
+  @@index([name])
+  @@map("artists")
+}
+
+model Lyricist {
+  id      BigInt         @id @default(autoincrement())
+  name    String         @unique
+  songs   SongLyricist[]
+  createdAt DateTime     @default(now())
+
+  @@index([name])
+  @@map("lyricists")
+}
+
+model SongArtist {
+  songId  BigInt
+  artistId BigInt
+  song    Song    @relation(fields: [songId], references: [id], onDelete: Cascade)
+  artist  Artist  @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([songId, artistId])
+  @@map("song_artists")
+}
+
+model SongLyricist {
+  songId    BigInt
+  lyricistId BigInt
+  song      Song      @relation(fields: [songId], references: [id], onDelete: Cascade)
+  lyricist  Lyricist  @relation(fields: [lyricistId], references: [id], onDelete: Cascade)
+
+  @@id([songId, lyricistId])
+  @@map("song_lyricists")
+}
+
+// Each record is one lyric line
+model LyricLine {
+  id            BigInt   @id @default(autoincrement())
+  lyricId       String   @unique
+  songId        BigInt
+  song          Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  text          String
+  lineIndex     Int
+  charCount     Int
+  paragraphId   String?
+  prevLineId    String?
+  nextLineId    String?
+  sentiment     String?
+  syntaxNotes   String?
+
+  syllableCount Int
+  tokenCount    Int
+  tonePatternText String
+  jyutpingCount Int
+
+  themes       LyricTheme[]
+  keywords     LyricKeyword[]
+  tokens       Token[]
+  syllables    Syllable[]
+  toneNgrams   ToneNgram[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([songId])
+  @@index([lineIndex])
+  @@index([sentiment])
+  @@map("lyric_lines")
+}
+
+model Theme {
+  id     BigInt       @id @default(autoincrement())
+  name   String       @unique
+  lyrics LyricTheme[]
+
+  @@index([name])
+  @@map("themes")
+}
+
+model LyricTheme {
+  lyricId BigInt
+  themeId BigInt
+  lyric   LyricLine @relation(fields: [lyricId], references: [id], onDelete: Cascade)
+  theme   Theme     @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@id([lyricId, themeId])
+  @@map("lyric_themes")
+}
+
+model Keyword {
+  id     BigInt         @id @default(autoincrement())
+  word   String         @unique
+  lyrics LyricKeyword[]
+
+  @@index([word])
+  @@map("keywords")
+}
+
+model LyricKeyword {
+  lyricId   BigInt
+  keywordId BigInt
+  lyric     LyricLine @relation(fields: [lyricId], references: [id], onDelete: Cascade)
+  keyword   Keyword   @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@id([lyricId, keywordId])
+  @@map("lyric_keywords")
+}
+
+// Per-token (optional for future extension)
+model Token {
+  id       BigInt     @id @default(autoincrement())
+  lyricId  BigInt
+  lyric    LyricLine  @relation(fields: [lyricId], references: [id], onDelete: Cascade)
+  position Int
+  text     String
+  pos      String?
+
+  @@index([lyricId, position])
+  @@map("tokens")
+}
+
+// One syllable per tone digit / jyutping
+model Syllable {
+  id        BigInt     @id @default(autoincrement())
+  lyricId   BigInt
+  lyric     LyricLine  @relation(fields: [lyricId], references: [id], onDelete: Cascade)
+  position  Int
+  jyutping  String
+  consonant String?
+  rhyme     String?
+  toneRaw   Int?
+  toneDigit Int?
+  char      String?
+
+  @@index([lyricId, position])
+  @@index([rhyme])
+  @@index([toneDigit])
+  @@map("syllables")
+}
+
+// N-grams of tones (mapped pronunciation for n>=2 bigrams)
+model ToneNgram {
+  id            BigInt     @id @default(autoincrement())
+  lyricId       BigInt
+  lyric         LyricLine  @relation(fields: [lyricId], references: [id], onDelete: Cascade)
+  n             Int
+  value         String
+  position      Int
+  syllableCount Int
+  tokenCount    Int
+
+  @@index([lyricId])
+  @@index([n, value])
+  @@index([position])
+  @@index([syllableCount, tokenCount])
+  @@map("tone_ngrams")
+}
