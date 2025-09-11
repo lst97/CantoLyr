@@ -1,9 +1,10 @@
 {
-  "devDependencies": {
-    "prisma": "^6.15.0"
-  },
-  "dependencies": {
-    "@google/genai": "^1.17.0",
-    "@prisma/client": "^6.15.0"
-  }
+	"devDependencies": {
+		"prisma": "^6.15.0"
+	},
+	"dependencies": {
+		"@google/genai": "^1.17.0",
+		"@prisma/client": "^6.15.0",
+		"@huggingface/transformers": "^3.0.0"
+	}
 }

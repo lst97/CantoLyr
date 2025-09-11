@@ -14,6 +14,7 @@
 		"vector:reset": "deno run -A scripts/reset-chroma.ts",
 		"vector:up": "docker compose up chroma -d",
 		"vector:down": "docker compose stop chroma && docker compose rm -f chroma",
+		"vector:test-chroma": "deno run -A scripts/test-chroma.ts",
 		"preprocess:lyrics": "deno run -A scripts/preprocess-lyrics.ts",
 		"convert:sample:zh-tw": "deno run -A scripts/convert-simplified-to-traditional.ts",
 		"normalize:chroma": "deno run -A scripts/normalize-for-chroma.ts",
