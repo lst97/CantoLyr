@@ -206,51 +206,19 @@ def _count_valid_records(path: str) -> int:
         return 0
 
 
-def main():
-    # Load .env first, then sanitize env before importing chromadb
-    load_dotenv()
-    _sanitize_chroma_env()
-
-    # Defer import until after env is sanitized to avoid pydantic errors
-    import chromadb
-    from chromadb.config import Settings
-    ensure_hf_token()
-
-    input_path = sys.argv[1] if len(sys.argv) > 1 else get_env("INPUT", "data/vector/chroma-all.jsonl")
-    collection_name = sys.argv[2] if len(sys.argv) > 2 else get_env("CHROMA_COLLECTION", "cantolyr_lexicon_v1_1024")
-    chroma_url = get_env("CHROMA_URL", "http://localhost:8000")
-
-    embed_model_id = get_env("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")
+def _build_embedder() -> Tuple[Callable[[List[str], int], List[List[float]]], int, str, str]:
+    """Create an embedding encoder, returning (encode, embed_dim, device, model_id)."""
+    embed_model_id = get_env("HF_EMBEDDING_MODEL", get_env("EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B"))
     embed_dim_raw = get_env("EMBED_DIM", get_env("EMBEDDING_DIM", ""))
-    embed_dim: int | None
     try:
         embed_dim = int(embed_dim_raw) if embed_dim_raw else None
     except Exception:
         embed_dim = None
-    # Ingestion batch size (number of JSONL records processed per upsert pass)
-    batch_size = int(get_env("EMBED_BATCH", "64"))
 
-    # Optional hard cap on stored/embedded document length to keep server load reasonable
-    max_doc_chars_env = get_env("MAX_DOC_CHARS", "2000")
-    try:
-        max_doc_chars = int(max_doc_chars_env) if max_doc_chars_env else None
-    except Exception:
-        max_doc_chars = 2000
-
-    if not os.path.exists(input_path):
-        print(f"❌ Input not found: {input_path}")
-        sys.exit(1)
-
-    print(f"🔗 Chroma: {chroma_url}")
-    print(f"📚 Collection: {collection_name}")
-    print(f"🧠 HF Embeddings: {embed_model_id} (dim={embed_dim})")
-
-    # Device selection
     device = _choose_device()
     print(f"🖥️  Using device: {_device_pretty(device)}")
-
     print("⏳ Loading embedding model...")
-    # Prefer SentenceTransformer; if unavailable for the repo, fall back to Transformers
+
     embed_encode: Callable[[List[str], int], List[List[float]]]
     try:
         try:
@@ -264,27 +232,19 @@ def main():
 
         def st_encode(texts: List[str], batch_size: int = 32) -> List[List[float]]:
             vecs = st_model.encode(texts, batch_size=min(batch_size, len(texts) or 1), normalize_embeddings=False)
-            # Convert to nested lists
             if hasattr(vecs, "tolist"):
                 return vecs.tolist()
             return [list(v) for v in vecs]
 
-        # Quick smoke encode on small sample to ensure model supports encode
         _ = st_encode(["hello"], batch_size=1)
         embed_encode = st_encode
         print("✅ Loaded via sentence-transformers.")
     except Exception:
         print("ℹ️  Falling back to transformers-based mean-pooling embedder...")
-        try:
-            embed_encode = _build_transformers_embedder(embed_model_id, device)
-            # Smoke test
-            _ = embed_encode(["hello"], batch_size=1)
-            print("✅ Loaded via transformers.")
-        except Exception as e:
-            print("❌ Failed to load embedding model. If gated, set HF_TOKEN and accept the license on Hugging Face.")
-            raise
+        embed_encode = _build_transformers_embedder(embed_model_id, device)
+        _ = embed_encode(["hello"], batch_size=1)
+        print("✅ Loaded via transformers.")
 
-    # If embed_dim not provided, infer from model output size
     if embed_dim is None:
         try:
             sample_len = len(embed_encode(["hello"], batch_size=1)[0])
@@ -294,19 +254,23 @@ def main():
             embed_dim = 768
             print(f"ℹ️  EMBED_DIM not set; defaulting to {embed_dim}")
 
-    client = chromadb.HttpClient(
-        host=(os.environ.get("CHROMA_HOST") or (chroma_url.split("://",1)[1].split(":")[0])),
-        port=int(os.environ.get("CHROMA_PORT") or (chroma_url.split(":")[-1] if ":" in chroma_url[8:] else ("443" if chroma_url.startswith("https:") else "8000"))),
-        ssl=chroma_url.startswith("https:") or False,
-        settings=Settings(anonymized_telemetry=False),
-    )
+    return embed_encode, int(embed_dim), device, embed_model_id
 
-    # Create collection
+
+def ingest_file(client, collection_name: str, input_path: str, embed_encode: Callable[[List[str], int], List[List[float]]], embed_dim: int, batch_size: int, max_doc_chars: int | None) -> None:
+    from chromadb.config import Settings  # type: ignore
+
+    if not os.path.exists(input_path):
+        print(f"❌ Input not found: {input_path}")
+        return
+
+    print(f"📚 Collection: {collection_name}")
+    print(f"📄 Input: {input_path}")
+
     print("🗂️  Preparing collection...")
     collection = client.get_or_create_collection(name=collection_name)
     print("✅ Collection ready.")
 
-    # Stream JSONL and upsert in batches
     def parse_jsonl(path: str):
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
@@ -321,6 +285,7 @@ def main():
     total_valid = _count_valid_records(input_path)
     if total_valid == 0:
         print("⚠️  No valid records found (need id and document).")
+        return
     else:
         print(f"🧮 Total valid records: {total_valid}")
 
@@ -345,14 +310,12 @@ def main():
                 skipped_invalid += 1
                 print(f"   ↳ Skipped id={oid} due to invalid metadata: {ve}")
                 continue
-            # Clean and optionally truncate the document to reduce server/indexing load
             cleaned_doc, was_trunc = _clean_document(raw_doc, max_doc_chars)
             if cleaned_doc is None or cleaned_doc == "":
                 skipped_invalid += 1
                 print(f"   ↳ Skipped id={oid} due to empty/invalid document type")
                 continue
             if was_trunc:
-                # Annotate metadata to signal truncation
                 meta = {**meta, "_truncated": True}
             ids.append(oid)
             docs.append(cleaned_doc)
@@ -360,7 +323,6 @@ def main():
         if not ids:
             continue
 
-        # Deduplicate within-batch to avoid double upserts of same id
         first_index_for_id: Dict[str, int] = {}
         dedup_ids: List[str] = []
         dedup_docs: List[str] = []
@@ -373,7 +335,6 @@ def main():
             dedup_docs.append(docs[i])
             dedup_metas.append(metas[i])
 
-        # Existing check to skip updates for existing ids. Request ids only to reduce payload.
         existing_ids: set[str] = set()
         try:
             got = collection.get(ids=dedup_ids, include=["ids"])  # type: ignore[arg-type]
@@ -388,7 +349,6 @@ def main():
         skip_count = len(dedup_ids) - len(new_idxs)
         skipped_existing += skip_count
 
-        # Always advance progress for processed valid inputs
         processed += len(dedup_ids)
         pbar.update(len(dedup_ids))
         left = max((total_valid - processed), 0) if total_valid else 0
@@ -401,14 +361,10 @@ def main():
         new_docs = [dedup_docs[i] for i in new_idxs]
         new_metas = [dedup_metas[i] for i in new_idxs]
 
-        # Prepare model-agnostic inputs
         prompts = build_prompts_for_docs(new_docs)
-        # Encode using selected backend
         vecs = embed_encode(prompts, batch_size=min(32, len(prompts)))
-        # Truncate + normalize to target dim (MRL)
         out_vecs = [trunc_and_norm(list(v), int(embed_dim or 768)) for v in vecs]
 
-        # Upsert only new
         try:
             collection.upsert(ids=new_ids, documents=new_docs, metadatas=new_metas, embeddings=out_vecs)
             inserted += len(new_ids)
@@ -416,7 +372,6 @@ def main():
         except Exception as e:
             msg = str(e)
             print(f"⚠️  Batch upsert failed ({len(new_ids)} new): {msg}")
-            # Per-record fallback
             successes = 0
             for i in range(len(new_ids)):
                 try:
@@ -429,9 +384,79 @@ def main():
             print(f"   ↳ Fallback inserted: +{successes} (inserted {inserted}, processed {processed}, left {left})")
 
     pbar.close()
-    print(
-        f"✅ Ingestion complete. processed={processed}, inserted={inserted}, skipped_existing={skipped_existing}, skipped_invalid={skipped_invalid}, failed={failed}"
+    print(f"✅ Ingestion complete. processed={processed}, inserted={inserted}, skipped_existing={skipped_existing}, skipped_invalid={skipped_invalid}, failed={failed}")
+
+
+def main():
+    # Load .env and sanitize for Chroma
+    load_dotenv()
+    _sanitize_chroma_env()
+    ensure_hf_token()
+
+    # Defer import until after env is sanitized
+    import chromadb
+    from chromadb.config import Settings
+
+    chroma_url = get_env("CHROMA_URL", "http://localhost:8000")
+    client = chromadb.HttpClient(
+        host=(os.environ.get("CHROMA_HOST") or (chroma_url.split("://", 1)[1].split(":")[0])),
+        port=int(os.environ.get("CHROMA_PORT") or (chroma_url.split(":")[-1] if ":" in chroma_url[8:] else ("443" if chroma_url.startswith("https:") else "8000"))),
+        ssl=chroma_url.startswith("https:") or False,
+        settings=Settings(anonymized_telemetry=False),
     )
+
+    # Shared ingest parameters
+    batch_size = int(get_env("EMBED_BATCH", get_env("CHROMA_UPSERT_BATCH", "64")))
+    max_doc_chars_env = get_env("MAX_DOC_CHARS", "2000")
+    try:
+        max_doc_chars = int(max_doc_chars_env) if max_doc_chars_env else None
+    except Exception:
+        max_doc_chars = 2000
+
+    # Build embedder once for all modes
+    embed_encode, embed_dim, device, model_id = _build_embedder()
+    print(f"🔗 Chroma: {chroma_url}")
+    print(f"🧠 HF Embeddings: {model_id} (dim={embed_dim})")
+
+    # CLI: modes
+    args = sys.argv[1:]
+    mode = ""
+    if args:
+        mode = args[0].lower()
+
+    def do_lexicon(input_override: str | None = None, coll_override: str | None = None):
+        input_path = input_override or get_env("LEXICON_INPUT", "data/vector/chroma-lexicon.jsonl")
+        collection_name = coll_override or get_env("CHROMA_COLLECTION_LEXICON", get_env("CHROMA_COLLECTION", "cantolyr_lexicon_v1_1024"))
+        ingest_file(client, collection_name, input_path, embed_encode, embed_dim, batch_size, max_doc_chars)
+
+    def do_lyrics(input_override: str | None = None, coll_override: str | None = None):
+        input_path = input_override or get_env("LYRICS_INPUT", "data/vector/chroma-lyrics.jsonl")
+        collection_name = coll_override or get_env("CHROMA_COLLECTION_LYRICS", "cantolyr_lyrics_v1_1024")
+        ingest_file(client, collection_name, input_path, embed_encode, embed_dim, batch_size, max_doc_chars)
+
+    # Back-compat: if first arg looks like a file, treat as single-shot [input, collection]
+    if mode and mode.endswith(".jsonl"):
+        input_path = args[0]
+        collection_name = args[1] if len(args) > 1 else get_env("CHROMA_COLLECTION", "cantolyr_lexicon_v1_1024")
+        print("ℹ️  Single-shot ingestion")
+        ingest_file(client, collection_name, input_path, embed_encode, embed_dim, batch_size, max_doc_chars)
+        return
+
+    if mode in ("lexicon", "lex", "vocab", "char"):
+        input_override = args[1] if len(args) > 1 and args[1].endswith(".jsonl") else None
+        coll_override = args[2] if len(args) > 2 else None
+        do_lexicon(input_override, coll_override)
+        return
+    if mode in ("lyrics", "lyr"):
+        input_override = args[1] if len(args) > 1 and args[1].endswith(".jsonl") else None
+        coll_override = args[2] if len(args) > 2 else None
+        do_lyrics(input_override, coll_override)
+        return
+
+    # Default: all
+    print("ℹ️  Mode not specified or 'all'; ingesting both lexicon and lyrics.")
+    do_lexicon()
+    do_lyrics()
 
 
 if __name__ == "__main__":
