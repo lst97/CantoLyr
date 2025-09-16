@@ -29,7 +29,8 @@ async function main() {
   const _lexiconInput = Deno.env.get("LEXICON_INPUT") || "data/vector/chroma-lexicon.jsonl";
   const _lyricsInput = Deno.env.get("LYRICS_INPUT") || "data/vector/chroma-lyrics.jsonl";
 
-  const _lexiconCollection = Deno.env.get("CHROMA_COLLECTION_LEXICON") || Deno.env.get("CHROMA_COLLECTION") || "cantolyr_lexicon_v1_1024";
+  const _lexiconCollection = Deno.env.get("CHROMA_COLLECTION_LEXICON") ||
+    Deno.env.get("CHROMA_COLLECTION") || "cantolyr_lexicon_v1_1024";
   const _lyricsCollection = Deno.env.get("CHROMA_COLLECTION_LYRICS") || "cantolyr_lyrics_v1_1024";
 
   const scriptDir = path.dirname(path.fromFileUrl(import.meta.url));
@@ -64,7 +65,7 @@ async function main() {
     if (Deno.args[2]) args.push(Deno.args[2]);
   } else if (mode === "all") {
     // 'all' mode needs no extra args; the Python script will read env defaults
-  } else if (mode.endsWith('.jsonl')) {
+  } else if (mode.endsWith(".jsonl")) {
     // Back-compat: allow direct file
     args.push(mode);
     if (Deno.args[1]) args.push(Deno.args[1]);

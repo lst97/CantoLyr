@@ -54,8 +54,8 @@ export class Container {
       defaultTtl: this.config.cache.defaultTtl,
       maxSize: this.config.cache.maxSize,
     });
-  const readingRepo = new LexiconReadRepository(this.prisma);
-  const lyricsRepo = new LyricsReadRepository(this.prisma);
+    const readingRepo = new LexiconReadRepository(this.prisma);
+    const lyricsRepo = new LyricsReadRepository(this.prisma);
     const writeRepo = new LexiconWriteRepository(this.prisma);
     const llmGroupedSelector = this.createLlmGroupedSelector();
 
@@ -63,7 +63,7 @@ export class Container {
       logger,
       cache,
       readingRepo,
-  lyricsRepo,
+      lyricsRepo,
       writeRepo,
       llmGroupedSelector,
       searchUseCase: new SearchUseCase(readingRepo, cache),

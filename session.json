@@ -1,0 +1,134 @@
+{
+  "meta": {
+    "feature": "cantonese-tone-constrained",
+    "version": 1,
+    "createdAt": "2025-09-16T07:04:19.713Z",
+    "seed": 188963,
+    "lineCount": 2
+  },
+  "lines": [
+    {
+      "lineIndex": 0,
+      "toneSequence": "39405223",
+      "digitSet": [
+        "3",
+        "9",
+        "40",
+        "5",
+        "22",
+        "39",
+        "52",
+        "23"
+      ],
+      "patterns": [
+        {
+          "id": "pat_0_3_9_40_5_22",
+          "patternString": "3 9 40 5 22",
+          "groups": [
+            "3",
+            "9",
+            "40",
+            "5",
+            "22"
+          ]
+        },
+        {
+          "id": "pat_1_39_40_52_23",
+          "patternString": "39 40 52 23",
+          "groups": [
+            "39",
+            "40",
+            "52",
+            "23"
+          ]
+        },
+        {
+          "id": "pat_2_3_9_40_52_23",
+          "patternString": "3 9 40 52 23",
+          "groups": [
+            "3",
+            "9",
+            "40",
+            "52",
+            "23"
+          ]
+        }
+      ],
+      "candidatePoolStats": {
+        "total": 990,
+        "semanticCount": 189,
+        "freqTopCount": 71,
+        "freqRandomCount": 730
+      },
+      "topSentences": [],
+      "topParagraphCandidates": [
+        "初友結緣偶會面\n今年少年邂逅動心\n今友結緣邂逅遇啱",
+        "初友結緣偶會面\n今年少年邂逅動心\n啱友結緣邂逅未婚",
+        "初友結緣偶會面\n今年少年邂逅動心\n初聯接頭偶遇立刻"
+      ],
+      "warnings": [
+        "WARN_LOW_FREQUENCY"
+      ]
+    },
+    {
+      "lineIndex": 1,
+      "toneSequence": "4200520",
+      "digitSet": [
+        "4",
+        "20",
+        "0",
+        "52",
+        "2",
+        "42",
+        "05"
+      ],
+      "patterns": [
+        {
+          "id": "pat_0_4_20_0_52",
+          "patternString": "4 20 0 52",
+          "groups": [
+            "4",
+            "20",
+            "0",
+            "52"
+          ]
+        },
+        {
+          "id": "pat_1_4_2_0_52",
+          "patternString": "4 2 0 52",
+          "groups": [
+            "4",
+            "2",
+            "0",
+            "52"
+          ]
+        },
+        {
+          "id": "pat_2_42_0_05_2",
+          "patternString": "42 0 05 2",
+          "groups": [
+            "42",
+            "0",
+            "05",
+            "2"
+          ]
+        }
+      ],
+      "candidatePoolStats": {
+        "total": 894,
+        "semanticCount": 160,
+        "freqTopCount": 66,
+        "freqRandomCount": 668
+      },
+      "topSentences": [],
+      "topParagraphCandidates": [
+        "結近年逢偶遇\n結遇情邂逅\n最近朋朋友遇",
+        "結近年逢偶遇\n結遇情邂逅\n再會聯情緒繫",
+        "結近年逢偶遇\n結遇情邂逅\n見面逢朋友逅"
+      ],
+      "warnings": [
+        "WARN_LOW_FREQUENCY"
+      ]
+    }
+  ]
+}

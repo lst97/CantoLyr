@@ -1,5 +1,9 @@
 import { PrismaClient } from "../../../../../prisma/generated/client.ts";
-import type { FeedbackRecord, SelectionInput, WriteRepo } from "../../../../application/ports/WriteRepo.ts";
+import type {
+  FeedbackRecord,
+  SelectionInput,
+  WriteRepo,
+} from "../../../../application/ports/WriteRepo.ts";
 
 /**
  * Prisma implementation of WriteRepo for the Lexicon domain

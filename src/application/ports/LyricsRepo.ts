@@ -1,4 +1,3 @@
-
 export interface LyricLineDTO {
   id: bigint;
   lyricId: string;

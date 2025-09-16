@@ -1,50 +1,52 @@
 {
-	"tasks": {
-		"dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-run --allow-ffi --watch src/main.ts",
-		"start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-run src/main.ts",
-		"lint": "deno lint",
-		"fmt": "deno fmt",
-		"db:generate": "deno run -A npm:prisma@latest generate",
-		"db:migrate": "deno run -A npm:prisma@latest migrate dev",
-		"db:populate": "deno run -A npm:prisma@latest generate && deno run -A scripts/populate-main-db.ts",
-		"db:reset-seed": "deno run -A scripts/db-reset-seed.ts",
-		"db:bootstrap": "deno run -A scripts/normalize-seed-db.ts",
-		"vector:ingest": "deno run -A scripts/ingest-chroma.ts",
-		"vector:bootstrap": "deno run -A scripts/bootstrap-chroma.ts",
-		"vector:reset": "deno run -A scripts/reset-chroma.ts",
-		"vector:up": "docker compose up chroma -d",
-		"vector:down": "docker compose stop chroma && docker compose rm -f chroma",
-		"vector:test-chroma": "deno run -A scripts/test-chroma.ts",
-		"preprocess:lyrics": "deno run -A scripts/preprocess-lyrics.ts",
-		"convert:sample:zh-tw": "deno run -A scripts/convert-simplified-to-traditional.ts",
-		"normalize:chroma": "deno run -A scripts/normalize-for-chroma.ts",
-		"normalize:chars": "deno run -A scripts/normalize-charlist.ts",
-		"normalize:words": "deno run -A scripts/normalize-wordslist.ts",
-		"normalize:lists": "deno task normalize:chars && deno task normalize:words"
-	},
-	"compilerOptions": {
-		"lib": ["deno.ns", "dom"],
-		"strict": true
-	},
-	"lint": {
-		"rules": {
-			"tags": ["recommended"],
-			"exclude": ["no-explicit-any"]
-		}
-	},
-	"fmt": {
-		"options": {
-			"useTabs": false,
-			"lineWidth": 100,
-			"indentWidth": 2,
-			"singleQuote": false
-		}
-	},
-	"imports": {
-		"chromadb": "npm:chromadb@^3.0.14",
-		"zod": "npm:zod@^4.1.5",
-		"@huggingface/transformers": "npm:@huggingface/transformers@^3.0.0",
-		"opencc-js": "npm:opencc-js@^1.0.5",
-		"ajv": "npm:ajv@^8.17.1"
-	}
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --allow-read --allow-write --allow-run --allow-ffi --watch src/main.ts",
+    "start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-run src/main.ts",
+    "lint": "deno lint",
+    "fmt": "deno fmt",
+    "db:generate": "deno run -A npm:prisma@latest generate",
+    "db:migrate": "deno run -A npm:prisma@latest migrate dev",
+    "db:populate": "deno run -A npm:prisma@latest generate && deno run -A scripts/populate-main-db.ts",
+    "db:reset-seed": "deno run -A scripts/db-reset-seed.ts",
+    "db:bootstrap": "deno run -A scripts/normalize-seed-db.ts",
+    "vector:ingest": "deno run -A scripts/ingest-chroma.ts",
+    "vector:bootstrap": "deno run -A scripts/bootstrap-chroma.ts",
+    "vector:reset": "deno run -A scripts/reset-chroma.ts",
+    "vector:up": "docker compose up chroma -d",
+    "vector:down": "docker compose stop chroma && docker compose rm -f chroma",
+    "vector:test-chroma": "deno run -A scripts/test-chroma.ts",
+    "preprocess:lyrics": "deno run -A scripts/preprocess-lyrics.ts",
+    "preprocess:posr": "deno run -A scripts/preprocess-pos-register.ts",
+    "convert:sample:zh-tw": "deno run -A scripts/convert-simplified-to-traditional.ts",
+    "normalize:chroma": "deno run -A scripts/normalize-for-chroma.ts",
+    "normalize:chars": "deno run -A scripts/normalize-charlist.ts",
+    "normalize:words": "deno run -A scripts/normalize-wordslist.ts",
+    "normalize:lists": "deno task normalize:chars && deno task normalize:words"
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom"],
+    "strict": true
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"],
+      "exclude": ["no-explicit-any"]
+    }
+  },
+  "fmt": {
+    "options": {
+      "useTabs": false,
+      "lineWidth": 100,
+      "indentWidth": 2,
+      "singleQuote": false
+    }
+  },
+  "imports": {
+    "chromadb": "npm:chromadb@^3.0.14",
+    "zod": "npm:zod@^4.1.8",
+    "@huggingface/transformers": "npm:@huggingface/transformers@^3.0.0",
+    "opencc-js": "npm:opencc-js@^1.0.5",
+    "ajv": "npm:ajv@^8.17.1",
+    "@google/genai": "npm:@google/genai@^1.19.0"
+  }
 }

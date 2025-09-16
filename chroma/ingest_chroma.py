@@ -387,6 +387,155 @@ def ingest_file(client, collection_name: str, input_path: str, embed_encode: Cal
     print(f"✅ Ingestion complete. processed={processed}, inserted={inserted}, skipped_existing={skipped_existing}, skipped_invalid={skipped_invalid}, failed={failed}")
 
 
+def ingest_files(
+    client,
+    collection_name: str,
+    input_paths: List[str],
+    embed_encode: Callable[[List[str], int], List[List[float]]],
+    embed_dim: int,
+    batch_size: int,
+    max_doc_chars: int | None,
+) -> None:
+    """Ingest from multiple JSONL files as a single logical stream.
+    Each file must contain JSONL objects with keys: id, document, and optional metadata.
+    """
+    from chromadb.config import Settings  # type: ignore
+
+    paths = [p for p in input_paths if p and os.path.exists(p)]
+    missing = [p for p in input_paths if p and not os.path.exists(p)]
+    if missing:
+        print(f"⚠️  Missing inputs will be skipped: {missing}")
+    if not paths:
+        print("❌ No valid input paths provided.")
+        return
+
+    print(f"📚 Collection: {collection_name}")
+    print(f"📄 Inputs: {paths}")
+
+    print("🗂️  Preparing collection...")
+    collection = client.get_or_create_collection(name=collection_name)
+    print("✅ Collection ready.")
+
+    def parse_jsonl(path: str):
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except Exception:
+                    continue
+
+    def iter_all():
+        for p in paths:
+            yield from parse_jsonl(p)
+
+    total_valid = sum(_count_valid_records(p) for p in paths)
+    if total_valid == 0:
+        print("⚠️  No valid records found across inputs (need id and document).")
+        return
+    else:
+        print(f"🧮 Total valid records: {total_valid}")
+
+    processed = 0
+    inserted = 0
+    skipped_existing = 0
+    skipped_invalid = 0
+    failed = 0
+    pbar = tqdm(total=total_valid or 0, unit="rec", desc="Upserting", ncols=80)
+    for chunk in batched(iter_all(), batch_size):
+        ids: List[str] = []
+        docs: List[str] = []
+        metas: List[Dict] = []
+        for obj in chunk:
+            oid = obj.get("id")
+            raw_doc = obj.get("document")
+            if not oid or not raw_doc:
+                continue
+            try:
+                meta = _validate_metadata(obj.get("metadata", {}))
+            except Exception as ve:
+                skipped_invalid += 1
+                print(f"   ↳ Skipped id={oid} due to invalid metadata: {ve}")
+                continue
+            cleaned_doc, was_trunc = _clean_document(raw_doc, max_doc_chars)
+            if cleaned_doc is None or cleaned_doc == "":
+                skipped_invalid += 1
+                print(f"   ↳ Skipped id={oid} due to empty/invalid document type")
+                continue
+            if was_trunc:
+                meta = {**meta, "_truncated": True}
+            ids.append(oid)
+            docs.append(cleaned_doc)
+            metas.append(meta)
+        if not ids:
+            continue
+
+        first_index_for_id: Dict[str, int] = {}
+        dedup_ids: List[str] = []
+        dedup_docs: List[str] = []
+        dedup_metas: List[Dict] = []
+        for i, _id in enumerate(ids):
+            if _id in first_index_for_id:
+                continue
+            first_index_for_id[_id] = i
+            dedup_ids.append(_id)
+            dedup_docs.append(docs[i])
+            dedup_metas.append(metas[i])
+
+        existing_ids: set[str] = set()
+        try:
+            got = collection.get(ids=dedup_ids, include=["ids"])  # type: ignore[arg-type]
+            if isinstance(got, dict):
+                existing_ids = set(got.get("ids", []) or [])
+            else:
+                existing_ids = set(getattr(got, "ids", []) or [])
+        except Exception:
+            existing_ids = set()
+
+        new_idxs = [i for i, _id in enumerate(dedup_ids) if _id not in existing_ids]
+        skip_count = len(dedup_ids) - len(new_idxs)
+        skipped_existing += skip_count
+
+        processed += len(dedup_ids)
+        pbar.update(len(dedup_ids))
+        left = max((total_valid - processed), 0) if total_valid else 0
+
+        if not new_idxs:
+            print(f"⏭️  Skipped existing: +{skip_count} (processed {processed}, left {left})")
+            continue
+
+        new_ids = [dedup_ids[i] for i in new_idxs]
+        new_docs = [dedup_docs[i] for i in new_idxs]
+        new_metas = [dedup_metas[i] for i in new_idxs]
+
+        prompts = build_prompts_for_docs(new_docs)
+        vecs = embed_encode(prompts, batch_size=min(32, len(prompts)))
+        out_vecs = [trunc_and_norm(list(v), int(embed_dim or 768)) for v in vecs]
+
+        try:
+            collection.upsert(ids=new_ids, documents=new_docs, metadatas=new_metas, embeddings=out_vecs)
+            inserted += len(new_ids)
+            print(f"⬆️  Upserted batch: +{len(new_ids)} (inserted {inserted}, processed {processed}, left {left})")
+        except Exception as e:
+            msg = str(e)
+            print(f"⚠️  Batch upsert failed ({len(new_ids)} new): {msg}")
+            successes = 0
+            for i in range(len(new_ids)):
+                try:
+                    collection.upsert(ids=[new_ids[i]], documents=[new_docs[i]], metadatas=[new_metas[i]], embeddings=[out_vecs[i]])
+                    successes += 1
+                except Exception as ie:
+                    failed += 1
+                    print(f"   ↳ Skipped id={new_ids[i]} due to error: {ie}")
+            inserted += successes
+            print(f"   ↳ Fallback inserted: +{successes} (inserted {inserted}, processed {processed}, left {left})")
+
+    pbar.close()
+    print(f"✅ Ingestion complete. processed={processed}, inserted={inserted}, skipped_existing={skipped_existing}, skipped_invalid={skipped_invalid}, failed={failed}")
+
+
 def main():
     # Load .env and sanitize for Chroma
     load_dotenv()
@@ -425,9 +574,30 @@ def main():
         mode = args[0].lower()
 
     def do_lexicon(input_override: str | None = None, coll_override: str | None = None):
-        input_path = input_override or get_env("LEXICON_INPUT", "data/vector/chroma-lexicon.jsonl")
+        """Ingest lexicon. If a single input JSONL is provided, use it; otherwise combine chars+words from preprocess.
+        Env overrides:
+          - LEXICON_INPUT: path to single JSONL to ingest (bypasses combine)
+          - LEXICON_CHARS_INPUT / LEXICON_WORDS_INPUT: defaults to preprocess lexicon paths
+        """
         collection_name = coll_override or get_env("CHROMA_COLLECTION_LEXICON", get_env("CHROMA_COLLECTION", "cantolyr_lexicon_v1_1024"))
-        ingest_file(client, collection_name, input_path, embed_encode, embed_dim, batch_size, max_doc_chars)
+
+        # Prefer an explicit single input if provided via CLI or env
+        single_input = input_override or get_env("LEXICON_INPUT", "")
+        if single_input and single_input.endswith(".jsonl"):
+            ingest_file(client, collection_name, single_input, embed_encode, embed_dim, batch_size, max_doc_chars)
+            return
+
+        chars_path = get_env("LEXICON_CHARS_INPUT", "data/preprocess/lexicon/chars.posr.jsonl")
+        words_path = get_env("LEXICON_WORDS_INPUT", "data/preprocess/lexicon/vocab.posr.jsonl")
+        ingest_files(
+            client,
+            collection_name,
+            [chars_path, words_path],
+            embed_encode,
+            embed_dim,
+            batch_size,
+            max_doc_chars,
+        )
 
     def do_lyrics(input_override: str | None = None, coll_override: str | None = None):
         input_path = input_override or get_env("LYRICS_INPUT", "data/vector/chroma-lyrics.jsonl")

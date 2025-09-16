@@ -1,7 +1,6 @@
 export { ChromaSearchService } from "./ChromaSearchService.ts";
 export type {
-	ChromaSearchResult,
-	ChromaSearchOptions,
-	ChromaCollectionStats,
+  ChromaCollectionStats,
+  ChromaSearchOptions,
+  ChromaSearchResult,
 } from "./ChromaSearchService.ts";
-

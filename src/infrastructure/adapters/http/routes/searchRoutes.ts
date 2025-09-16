@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import type { Container } from "../../../container/Container.ts";
-import { ZodError, z } from "zod";
+import { z, ZodError } from "zod";
 import { SearchPronunciationQuerySchema, SearchRhymeQuerySchema } from "../schemas.ts";
 import type { EntryType } from "../../../../shared/types/common.ts";
 

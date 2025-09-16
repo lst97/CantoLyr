@@ -49,7 +49,8 @@ Prompt: two peron just meet together during some event and they can wait to see 
 - Group 1 unique numbers: {33, 2, 3, 4, 5, 39, 9, 42, 22, 25, 59} - (meet a friend)
 - Group 2 unique numbers: {33, 34, 3, 4} - (playing game)
 - Group 3 unique numbers: {0, 2, 3, 39, 9, 42, 23, 30, 94} - (Sun set)
-- Group 4 unique numbers: {32, 33, 2, 3, 4, 5, 0, 44, 53, 22, 23, 24, 94} - (Go home and separate and hope to see again next time)
+- Group 4 unique numbers: {32, 33, 2, 3, 4, 5, 0, 44, 53, 22, 23, 24, 94} - (Go home and separate
+  and hope to see again next time)
 
 ---
 
@@ -57,10 +58,10 @@ Prompt: two peron just meet together during some event and they can wait to see 
 
 query pgdb frequencies word top 100 (match tone)
 
-group x:
-iteration group x (33, 2, 3, 4, 5, 39, 9, 42, 22, 25, 59)
+group x: iteration group x (33, 2, 3, 4, 5, 39, 9, 42, 22, 25, 59)
 
-Requirement: generated sentence candidate if any + [scene (make a set for the tone base on scene - 200) + 50(random weight by freq and tone - no scene)]
+Requirement: generated sentence candidate if any + [scene (make a set for the tone base on
+scene - 200) + 50(random weight by freq and tone - no scene)]
 
 ## Step 3 - Query llm : (22 5 33 9 4 25 9)x5, (22 5 3 39 42 59)x5, (2 25 33 9 42 59)x5
 

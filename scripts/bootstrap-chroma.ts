@@ -18,91 +18,88 @@ import { getLogger } from "jsr:@std/log";
 const logger = getLogger();
 
 function flag(name: string): boolean {
-	return Deno.args.some((a) => a === `--${name}`);
+  return Deno.args.some((a) => a === `--${name}`);
 }
 
 function kv(name: string): string | undefined {
-	const a = Deno.args.find((x) => x.startsWith(`--${name}=`));
-	return a ? a.split("=", 2)[1] : undefined;
+  const a = Deno.args.find((x) => x.startsWith(`--${name}=`));
+  return a ? a.split("=", 2)[1] : undefined;
 }
 
 async function runDeno(
-	script: string,
-	args: string[],
-	env: Record<string, string> = {}
+  script: string,
+  args: string[],
+  env: Record<string, string> = {},
 ) {
-	const p = new Deno.Command(Deno.execPath(), {
-		args: ["run", "-A", script, ...args],
-		stdout: "inherit",
-		stderr: "inherit",
-		env,
-	}).spawn();
-	const { code } = await p.status;
-	if (code !== 0) throw new Error(`deno run ${script} exited ${code}`);
+  const p = new Deno.Command(Deno.execPath(), {
+    args: ["run", "-A", script, ...args],
+    stdout: "inherit",
+    stderr: "inherit",
+    env,
+  }).spawn();
+  const { code } = await p.status;
+  if (code !== 0) throw new Error(`deno run ${script} exited ${code}`);
 }
 
 async function ensureChromaUp(urlStr: string) {
-	try {
-		const url = new URL(urlStr);
-		const client = new ChromaClient({
-			ssl: url.protocol === "https:",
-			host: url.hostname,
-			port: Number(url.port || (url.protocol === "https:" ? 443 : 8000)),
-		});
-		await client.heartbeat();
-	} catch (e) {
-		logger.error("❌ Could not reach Chroma. Is it running?");
-		logger.error("   Try: pnpm vector:up");
-		throw e;
-	}
+  try {
+    const url = new URL(urlStr);
+    const client = new ChromaClient({
+      ssl: url.protocol === "https:",
+      host: url.hostname,
+      port: Number(url.port || (url.protocol === "https:" ? 443 : 8000)),
+    });
+    await client.heartbeat();
+  } catch (e) {
+    logger.error("❌ Could not reach Chroma. Is it running?");
+    logger.error("   Try: pnpm vector:up");
+    throw e;
+  }
 }
 
 async function maybeNormalize(inputPath: string) {
-	if (existsSync(inputPath)) return;
-	logger.info(`ℹ️  Missing ${inputPath}. Running normalize-for-chroma…`);
-	await runDeno("scripts/normalize-for-chroma.ts", []);
+  if (existsSync(inputPath)) return;
+  logger.info(`ℹ️  Missing ${inputPath}. Running normalize-for-chroma…`);
+  await runDeno("scripts/normalize-for-chroma.ts", []);
 }
 
 async function maybeReset(url: string, collection: string, doReset: boolean) {
-	if (!doReset) return;
-	logger.info("♻️  Resetting target collection before ingest…");
-	await runDeno("scripts/reset-chroma.ts", [`--collection=${collection}`], {
-		CHROMA_URL: url,
-	});
+  if (!doReset) return;
+  logger.info("♻️  Resetting target collection before ingest…");
+  await runDeno("scripts/reset-chroma.ts", [`--collection=${collection}`], {
+    CHROMA_URL: url,
+  });
 }
 
 async function ingest(url: string, collection: string, inputPath: string) {
-	logger.info("⬆️  Ingesting into Chroma…");
-	await runDeno("scripts/ingest-chroma.ts", [inputPath, collection], {
-		CHROMA_URL: url,
-	});
+  logger.info("⬆️  Ingesting into Chroma…");
+  await runDeno("scripts/ingest-chroma.ts", [inputPath, collection], {
+    CHROMA_URL: url,
+  });
 }
 
 async function main() {
-	await load({ export: true });
-	const chromaUrl =
-		kv("url") || Deno.env.get("CHROMA_URL") || "http://localhost:8000";
-	const collection =
-		kv("collection") ||
-		Deno.env.get("CHROMA_COLLECTION") ||
-		"cantolyr_lexicon_v1_1024";
-	const input = kv("input") || "data/vector/chroma-all.jsonl";
-	const doReset =
-		flag("reset") ||
-		/^(1|true|yes)$/i.test(
-			String(Deno.env.get("VECTOR_RESET_ON_BOOTSTRAP") || "")
-		);
+  await load({ export: true });
+  const chromaUrl = kv("url") || Deno.env.get("CHROMA_URL") || "http://localhost:8000";
+  const collection = kv("collection") ||
+    Deno.env.get("CHROMA_COLLECTION") ||
+    "cantolyr_lexicon_v1_1024";
+  const input = kv("input") || "data/vector/chroma-all.jsonl";
+  const doReset = flag("reset") ||
+    /^(1|true|yes)$/i.test(
+      String(Deno.env.get("VECTOR_RESET_ON_BOOTSTRAP") || ""),
+    );
 
-	logger.info(`🔗 Chroma: ${chromaUrl}`);
-	logger.info(`📚 Collection: ${collection}`);
-	logger.info(`📄 Input: ${input}`);
+  logger.info(`🔗 Chroma: ${chromaUrl}`);
+  logger.info(`📚 Collection: ${collection}`);
+  logger.info(`📄 Input: ${input}`);
 
-	await ensureChromaUp(chromaUrl);
-	await maybeNormalize(input);
-	await maybeReset(chromaUrl, collection, doReset);
-	await ingest(chromaUrl, collection, input);
+  await ensureChromaUp(chromaUrl);
+  await maybeNormalize(input);
+  await maybeReset(chromaUrl, collection, doReset);
+  await ingest(chromaUrl, collection, input);
 
-	logger.info("✅ Bootstrap complete.");
+  logger.info("✅ Bootstrap complete.");
 }
 
 if (import.meta.main) main();

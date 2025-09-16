@@ -1,5 +1,9 @@
 import { PrismaClient } from "../../../../../prisma/generated/client.ts";
-import type { LyricLineDTO, LyricSearchParams, LyricsRepo } from "../../../../application/ports/LyricsRepo.ts";
+import type {
+  LyricLineDTO,
+  LyricSearchParams,
+  LyricsRepo,
+} from "../../../../application/ports/LyricsRepo.ts";
 
 /**
  * Prisma implementation for Lyrics read operations (CQRS read side)
@@ -76,13 +80,13 @@ export class LyricsReadRepository implements LyricsRepo {
         song: { select: { id: true, docId: true, title: true, year: true } },
         toneNgrams: pronunciation
           ? {
-              where: {
-                n: 2,
-                value: pronunciation,
-                ...(pronunciationPosition ? { position: pronunciationPosition } : {}),
-              },
-              select: { value: true, position: true },
-            }
+            where: {
+              n: 2,
+              value: pronunciation,
+              ...(pronunciationPosition ? { position: pronunciationPosition } : {}),
+            },
+            select: { value: true, position: true },
+          }
           : false,
         themes: themes?.length ? { include: { theme: true } } : false,
         keywords: keywords?.length ? { include: { keyword: true } } : false,

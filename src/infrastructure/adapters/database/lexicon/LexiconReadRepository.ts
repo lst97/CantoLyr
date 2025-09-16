@@ -1,5 +1,5 @@
 import { PrismaClient } from "../../../../../prisma/generated/client.ts";
-import { ReadingRepo, ReadingDTO } from "../../../../application/ports/ReadingRepo.ts";
+import { ReadingDTO, ReadingRepo } from "../../../../application/ports/ReadingRepo.ts";
 import { EntryType } from "../../../../shared/types/common.ts";
 
 /**
@@ -38,7 +38,9 @@ export class LexiconReadRepository implements ReadingRepo {
     entryType?: EntryType;
   }): Promise<number> {
     const { pronunciation, isPrefix = false, entryType } = query;
-    const pronunciationCondition = isPrefix ? { startsWith: pronunciation } : { equals: pronunciation };
+    const pronunciationCondition = isPrefix
+      ? { startsWith: pronunciation }
+      : { equals: pronunciation };
     const entryTypeCondition = entryType ? { type: entryType } : {};
     return await this.prisma.reading.count({
       where: { pronunciation: pronunciationCondition, entry: entryTypeCondition },
@@ -53,7 +55,9 @@ export class LexiconReadRepository implements ReadingRepo {
     offset?: number;
   }): Promise<ReadingDTO[]> {
     const { pronunciation, isPrefix = false, entryType, limit = 50, offset = 0 } = query;
-    const pronunciationCondition = isPrefix ? { startsWith: pronunciation } : { equals: pronunciation };
+    const pronunciationCondition = isPrefix
+      ? { startsWith: pronunciation }
+      : { equals: pronunciation };
     const entryTypeCondition = entryType ? { type: entryType } : {};
 
     const readings = await this.prisma.reading.findMany({
