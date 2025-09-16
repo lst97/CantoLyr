@@ -582,7 +582,7 @@ def main():
         collection_name = coll_override or get_env("CHROMA_COLLECTION_LEXICON", get_env("CHROMA_COLLECTION", "cantolyr_lexicon_v1_1024"))
 
         # Prefer an explicit single input if provided via CLI or env
-        single_input = input_override or get_env("LEXICON_INPUT", "")
+        single_input = input_override or get_env("LEXICON_INPUT", "data/vector/chroma-lexicon.jsonl")
         if single_input and single_input.endswith(".jsonl"):
             ingest_file(client, collection_name, single_input, embed_encode, embed_dim, batch_size, max_doc_chars)
             return

@@ -2,7 +2,7 @@ import json
 
 registers = set()
 pos_values = set()
-files = ['data/normalized/chars.jsonl', 'data/normalized/normalized-vocab.jsonl']
+files = ['data/preprocess/lexicon/chars.posr.jsonl', 'data/preprocess/lexicon/vocab.posr.jsonl']
 
 for file_path in files:
     print(f"\n{file_path}:")

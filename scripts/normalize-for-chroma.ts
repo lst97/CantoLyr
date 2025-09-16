@@ -344,8 +344,8 @@ async function readAllJsonlUnder(dir: string): Promise<string> {
 
 async function main() {
   const args = Deno.args;
-  const charsIn = args[0] || "data/normalized/normalized-chars.jsonl";
-  const vocabIn = args[1] || "data/normalized/normalized-vocab.jsonl";
+  const charsIn = args[0] || "data/preprocess/lexicon/chars.posr.jsonl";
+  const vocabIn = args[1] || "data/preprocess/lexicon/vocab.posr.jsonl";
   const lyricsDir = args[2] || "data/preprocess/lyrics"; // recursive root
   const charsOut = args[3] || "data/vector/chroma-chars.jsonl";
   const vocabOut = args[4] || "data/vector/chroma-vocab.jsonl";
