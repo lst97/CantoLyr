@@ -75,7 +75,7 @@ if (import.meta.main) {
     );
     exp.lines[index] = updated;
     if (raw.out) {
-      await saveToFile({ sessionId: crypto.randomUUID(), seed, lines: exp.lines }, String(raw.out));
+      await saveToFile({ sessionId: crypto.randomUUID(), seed, lines: exp.lines, topOutputs: exp.topOutputs }, String(raw.out));
       console.log(`Updated session written to ${raw.out}`);
     }
     if (raw.json) {

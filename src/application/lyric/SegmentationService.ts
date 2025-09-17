@@ -23,6 +23,10 @@ export class SegmentationService {
     if (!/^[0-9]+$/.test(toneSequence)) {
       throw new Error(LyricErrorCode.ERROR_INVALID_INPUT);
     }
+    // Enforce minimum length: at least 3 digits required
+    if (toneSequence.length < 3) {
+      throw new Error("TOO_SHORT");
+    }
     // Validate allowed digits per spec: {0,2,3,4,5,9}
     const allowedSingles = new Set(["0", "2", "3", "4", "5", "9"]);
     for (const ch of toneSequence) {

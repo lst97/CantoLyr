@@ -73,14 +73,26 @@ const session = startSession({ prompt, toneSequences, config });
 for (const ts of session.toneSequences) {
   const seg = segmentationService.segment(ts.raw); // 3 patterns
   const intent = sceneService.inferIntent({ prompt, index: ts.index });
-  const pool = retrievalService.buildPool({ lineIndex: ts.index, patterns: seg.patterns, intent });
-  if (pool.digitInsufficient) continue; // mark line incomplete
+  const pool = await retrievalService.buildPool({
+    lineIndex: ts.index,
+    toneSequence: ts.raw,
+    digitSet: seg.digitSet,
+    patterns: seg.patterns,
+    sceneIntent: intent,
+    config: retrievalConfig,
+  });
+  if (pool.error) continue; // mark line incomplete
+  const patternsWithSlots = seg.patterns.map((p) => ({
+    ...p,
+    slots: pool.patternSlots[p.id] ?? p.slots ?? [],
+  }));
   const gen = generationService.generate({
     lineIndex: ts.index,
-    patterns: seg.patterns,
-    pool,
-    intent,
-    continuity: session.accepted,
+    patterns: patternsWithSlots,
+    candidatePool: pool.candidates,
+    sceneIntent: intent,
+    continuityContext: { previousLines: session.accepted },
+    config: generationConfig,
   });
   const ranked = rankingService.selectTop3({ lineIndex: ts.index, candidates: gen.sentences });
   updateLine(session, ranked);

@@ -29,6 +29,7 @@ interface Args {
   seed?: number;
   out?: string;
   json?: boolean; // output JSON to stdout
+  top?: number; // number of top outputs (complete lyrics) to compose
 }
 
 function usage(): void {
@@ -41,6 +42,7 @@ function usage(): void {
   console.log("Optional:");
   console.log("  --seed <n>               Seed for reproducibility");
   console.log("  --out <file>             Write JSON session export to file");
+  console.log("  --top <n>                Compose and include top-N full lyric outputs");
   console.log("  --json                   Emit JSON export to stdout");
   console.log("  -h, --help               Show help");
 }
@@ -60,6 +62,7 @@ if (import.meta.main) {
       seed: raw.seed ? Number(raw.seed) : undefined,
       out: raw.out ? String(raw.out) : undefined,
       json: Boolean(raw.json),
+      top: raw.top ? Number(raw.top) : undefined,
     };
     if (!args.prompt || !args.tones) {
       usage();
@@ -91,7 +94,7 @@ if (import.meta.main) {
       toneSequences,
     );
 
-    const state: SessionState = { sessionId: crypto.randomUUID(), seed, lines: [] };
+  const state: SessionState = { sessionId: crypto.randomUUID(), seed, lines: [] };
     const previousLines: string[] = [];
     for (let i = 0; i < toneSequences.length; i++) {
       const toneSeq = toneSequences[i];
@@ -120,6 +123,18 @@ if (import.meta.main) {
       if (lineResult.topSentences[0]) previousLines.push(lineResult.topSentences[0].text);
     }
 
+    // Optionally compose top-N complete lyric outputs using all lines' candidates
+    const topN = args.top ?? 3;
+    if (topN > 0) {
+      const composed = await sessionService.composeParagraphs(
+        state.lines,
+        sceneIntent,
+        config.ranking,
+        topN,
+      );
+      state.topOutputs = composed.paragraphs;
+    }
+
     if (args.out) {
       await saveToFile(state, args.out);
       console.log(`Session written to ${args.out}`);
@@ -134,6 +149,13 @@ if (import.meta.main) {
         line.topSentences.forEach((ts) =>
           console.log(`  ${ts.finalRank}. ${ts.text} (score=${ts.mmrScore.toFixed(3)})`)
         );
+      }
+      if (state.topOutputs && state.topOutputs.length) {
+        console.log("\nTop outputs:");
+        state.topOutputs.forEach((p, i) => {
+          console.log(`\n#${i + 1}`);
+          console.log(p);
+        });
       }
     }
   } catch (err) {

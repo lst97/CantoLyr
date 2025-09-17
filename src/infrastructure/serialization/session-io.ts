@@ -15,11 +15,12 @@ export interface SessionExportMeta {
 export interface SessionExport {
   meta: SessionExportMeta;
   lines: LinePipelineResult[];
+  topOutputs?: string[];
 }
 
 export function toExport(
   state: SessionState,
-  feature = "cantonese-tone-constrained",
+  feature = "lyrics-generation",
 ): SessionExport {
   return {
     meta: {
@@ -30,6 +31,7 @@ export function toExport(
       lineCount: state.lines.length,
     },
     lines: state.lines,
+    topOutputs: state.topOutputs,
   };
 }
 

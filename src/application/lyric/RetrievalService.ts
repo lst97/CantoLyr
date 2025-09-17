@@ -8,8 +8,126 @@ import { LyricErrorCode, LyricWarningCode } from "../../shared/lyric-codes.ts";
 import { ChromaClient } from "chromadb";
 import { pipeline } from "@huggingface/transformers";
 import { GoogleGenAI } from "@google/genai";
-import { isAbsolute, join, normalize } from "https://deno.land/std@0.202.0/path/mod.ts";
+import { isAbsolute, join, normalize } from "jsr:@std/path";
 import { PrismaClient } from "../../../prisma/generated/client.ts";
+import { PatternSlot, SegmentationPattern } from "../../domain/lyric/entities.ts";
+
+const ALLOWED_POS_TAGS = new Set([
+  "NOUN",
+  "VERB",
+  "ADJ",
+  "ADV",
+  "PRON",
+  "PART",
+  "CONJ",
+  "DET",
+  "NUM",
+  "AUX",
+  "ADP",
+  "SCONJ",
+  "PROPN",
+  "INTJ",
+  "X",
+]);
+
+const POS_ALIAS: Record<string, string> = {
+  ADJECTIVE: "ADJ",
+  ADVERB: "ADV",
+  PRONOUN: "PRON",
+  CONJUNCTION: "CONJ",
+  DETERMINER: "DET",
+  NOUN_PHRASE: "NOUN",
+  VERB_PHRASE: "VERB",
+  PARTICLE: "PART",
+  PREPOSITION: "ADP",
+  PROPER_NOUN: "PROPN",
+  INTERJECTION: "INTJ",
+};
+
+const DEFAULT_POS_SEQUENCE = [
+  "NOUN",
+  "ADV",
+  "VERB",
+  "ADJ",
+  "NOUN",
+  "PART",
+  "VERB",
+  "ADP",
+];
+
+const FALLBACK_SLOT_THEMES = [
+  "主角",
+  "情緒",
+  "動作",
+  "場景",
+  "對象",
+  "細節",
+  "期盼",
+  "語氣",
+];
+
+const POS_HINTS: Record<string, { label: string; template: (focus: string, detail: string) => string }> = {
+  NOUN: {
+    label: "名詞",
+    template: (focus, detail) => `描述${focus}裡與${detail}相關的名詞`,
+  },
+  VERB: {
+    label: "動作",
+    template: (focus, detail) => `描寫${focus}中${detail}會做出的動作或變化`,
+  },
+  ADJ: {
+    label: "形容詞",
+    template: (focus, detail) => `形容${focus}時${detail}的感覺或特質`,
+  },
+  ADV: {
+    label: "副詞",
+    template: (focus, detail) => `強化${focus}情境下${detail}情緒的副詞`,
+  },
+  PRON: {
+    label: "代詞",
+    template: (focus, detail) => `替代${focus}裡${detail}角色的代詞或稱呼`,
+  },
+  PART: {
+    label: "語氣助詞",
+    template: (focus, detail) => `呼應${focus}下${detail}情緒的語氣助詞`,
+  },
+  CONJ: {
+    label: "連接詞",
+    template: (focus, detail) => `連結${focus}前後${detail}意念的連接詞`,
+  },
+  DET: {
+    label: "限定詞",
+    template: (focus, detail) => `限定${focus}裡${detail}對象的詞語`,
+  },
+  NUM: {
+    label: "數量詞",
+    template: (focus, detail) => `表達${focus}當下${detail}次數或時刻的數量詞`,
+  },
+  AUX: {
+    label: "助動詞",
+    template: (focus, detail) => `表明${focus}願望或${detail}決心的助動詞`,
+  },
+  ADP: {
+    label: "介詞",
+    template: (focus, detail) => `連結${focus}與${detail}關係的介詞`,
+  },
+  SCONJ: {
+    label: "從屬連接詞",
+    template: (focus, detail) => `帶出${focus}背後${detail}原因的從屬連接詞`,
+  },
+  PROPN: {
+    label: "專有名詞",
+    template: (focus, detail) => `象徵${focus}裡${detail}意象的專有名詞`,
+  },
+  INTJ: {
+    label: "感嘆詞",
+    template: (focus, detail) => `傳達${focus}時${detail}情緒的感嘆詞`,
+  },
+  X: {
+    label: "語塊",
+    template: (focus, detail) => `表達${focus}氛圍裡${detail}感受的語塊`,
+  },
+};
 
 export interface SceneIntent {
   title: string;
@@ -42,6 +160,7 @@ export interface RetrievalRequest {
   lineIndex: number;
   toneSequence: string;
   digitSet: string[]; // from segmentation
+  patterns: SegmentationPattern[];
   sceneIntent: SceneIntent;
   config: RetrievalConfig;
   // Optional per-line overrides for theme-driven retrieval
@@ -55,6 +174,9 @@ export interface LexicalCandidate {
   provenance: string; // semantic | freq-top | freq-random
   sceneRelevanceScore?: number; // 0..1 for semantic results
   freq?: number; // frequency from metadata (if available)
+  posTag?: string;
+  slotMatches?: string[];
+  sourcePrompt?: string;
 }
 
 export interface DigitStats {
@@ -72,6 +194,7 @@ export interface RetrievalResult {
   total: number;
   perDigit: Record<string, DigitStats>;
   candidates: LexicalCandidate[];
+  patternSlots: Record<string, PatternSlot[]>;
   warnings: string[];
   error?: string;
   globalPicks?: {
@@ -102,7 +225,7 @@ export class RetrievalService {
     this.transformersCache = Deno.env.get("TRANSFORMERS_CACHE") ?? "./.cache/transformers";
     this.geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? undefined;
     this.geminiSceneModel = Deno.env.get("GEMINI_SCENE_MODEL") ??
-      "gemini-2.0-flash-lite-preview-02-05";
+      "gemini-2.5-flash-lite";
   }
 
   async buildPool(req: RetrievalRequest): Promise<RetrievalResult> {
@@ -119,46 +242,133 @@ export class RetrievalService {
     // 2) Build refined semantic query variants: base vs 子題 (sub-themes)
     const { baseQueries, subThemeQueries } = this.buildBaseAndSubThemeQueries(refinedIntent, req);
 
-    console.log(`Base Queries: ${baseQueries.join(" | ")}`);
-    if (subThemeQueries.length) console.log(`SubTheme Queries: ${subThemeQueries.join(" | ")}`);
+    // 3) Build POS-aware slot plan per pattern and digit
+    const slotPlan = await this.buildPatternSlotPlan(req.patterns ?? [], refinedIntent);
+    const digitSlotMap = new Map<string, PatternSlot[]>();
+    for (const slots of Object.values(slotPlan)) {
+      for (const slot of slots) {
+        if (!slot || !slot.toneDigit) continue;
+        const existing = digitSlotMap.get(slot.toneDigit) || [];
+        existing.push(slot);
+        digitSlotMap.set(slot.toneDigit, existing);
+      }
+    }
 
-    // 3) Semantic retrieval per digit until reaching semanticTarget (~200)
-    const confTarget = req.config.semanticTarget ?? 200;
+    // 4) Semantic retrieval per digit until reaching semanticTarget
+    const confTarget = req.config.semanticTarget ?? 1000;
     const semanticTarget = Math.max(
       50,
-      Math.floor(confTarget < 5 ? 200 * confTarget : confTarget),
+      Math.floor(confTarget < 5 ? 1000 * confTarget : confTarget),
     );
     const perDigitBudget = Math.max(10, Math.floor(semanticTarget / req.digitSet.length));
     const semantic: LexicalCandidate[] = [];
+    const candidateByKey = new Map<string, LexicalCandidate>();
     const seenKey = new Set<string>(); // surface|digit
     const seenSurface = new Set<string>(); // de-dupe across entire pool by surface
     const perDigit: Record<string, DigitStats> = {};
-    const minSim = req.config.semanticMinSimilarity ?? 0.62;
-    for (const digit of req.digitSet) {
-      // Phase 1: base queries only
-      const results = await this.semanticSearchForDigit(baseQueries, digit, perDigitBudget, minSim);
-      console.log(
-        `Digit ${digit}: found ${results.length} semantic candidates ${
-          results.map((r) => r.surface).join(", ")
-        }`,
-      );
-      let count = 0;
-      for (const r of results) {
-        const key = `${r.surface}|${digit}`;
-        if (seenKey.has(key)) continue;
-        seenKey.add(key);
-        semantic.push({
-          surface: r.surface,
-          toneDigit: digit,
-          provenance: "semantic",
-          sceneRelevanceScore: r.similarity,
-          freq: r.freq,
-        });
-        seenSurface.add(r.surface);
-        count++;
-        if (count >= perDigitBudget) break;
+    const minSim = req.config.semanticMinSimilarity ?? 0.3;
+
+    const upsertSlotMatch = (
+      candidate: LexicalCandidate,
+      matchId?: string,
+      prompt?: string,
+    ) => {
+      if (!matchId) return;
+      const matches = new Set(candidate.slotMatches ?? []);
+      matches.add(matchId);
+      candidate.slotMatches = Array.from(matches);
+      if (prompt && !candidate.sourcePrompt) candidate.sourcePrompt = prompt;
+    };
+
+    const upsertSemanticCandidate = (
+      digit: string,
+      result: {
+        surface: string;
+        similarity: number;
+        freq?: number;
+        posTag?: string;
+        slotId?: string;
+        prompt?: string;
+      },
+      provenance: string,
+    ): boolean => {
+      const key = `${result.surface}|${digit}`;
+      const existing = candidateByKey.get(key);
+      if (existing) {
+        existing.sceneRelevanceScore = Math.max(existing.sceneRelevanceScore ?? 0, result.similarity);
+        if (result.freq != null) existing.freq = result.freq;
+        if (result.posTag && !existing.posTag) existing.posTag = result.posTag;
+        upsertSlotMatch(existing, result.slotId, result.prompt);
+        return false;
       }
-      // Fallback: if no semantic results, split digit into 2- or 1-digit chunks (e.g., 9405 -> 94, 05) and search each chunk
+      const candidate: LexicalCandidate = {
+        surface: result.surface,
+        toneDigit: digit,
+        provenance,
+        sceneRelevanceScore: result.similarity,
+        freq: result.freq,
+        posTag: result.posTag,
+        slotMatches: result.slotId ? [result.slotId] : undefined,
+        sourcePrompt: result.prompt,
+      };
+      semantic.push(candidate);
+      candidateByKey.set(key, candidate);
+      seenKey.add(key);
+      seenSurface.add(candidate.surface);
+      return true;
+    };
+
+    for (const digit of req.digitSet) {
+      const slotDescriptors = digitSlotMap.get(digit) ?? [];
+      const slotCount = Math.max(slotDescriptors.length, 1);
+      const slotBudget = Math.max(3, Math.floor(perDigitBudget / slotCount));
+      let count = 0;
+
+      for (const slot of slotDescriptors) {
+        const prompt = slot.retrievalPrompt?.trim();
+        const slotQueries = prompt && prompt.length ? [prompt] : baseQueries;
+        let slotResults = await this.semanticSearchForDigit(
+          slotQueries,
+          digit,
+          slotBudget,
+          minSim,
+          { posTag: slot.posTag, slot },
+        );
+        let slotAdded = 0;
+        for (const r of slotResults) {
+          if (upsertSemanticCandidate(digit, r, "semantic-slot")) slotAdded++;
+        }
+        // Relax POS constraint if slot yielded nothing
+        if (slotAdded === 0 && slot.posTag) {
+          slotResults = await this.semanticSearchForDigit(
+            slotQueries,
+            digit,
+            slotBudget,
+            minSim,
+            { slot },
+          );
+          for (const r of slotResults) {
+            if (upsertSemanticCandidate(digit, r, "semantic-slot-relaxed")) slotAdded++;
+          }
+        }
+        count += slotAdded;
+      }
+
+      const remainingBudget = Math.max(0, perDigitBudget - count);
+      if (remainingBudget > 0) {
+        const generalResults = await this.semanticSearchForDigit(
+          baseQueries,
+          digit,
+          remainingBudget,
+          minSim,
+        );
+        for (const r of generalResults) {
+          if (upsertSemanticCandidate(digit, r, "semantic")) count++;
+          if (count >= perDigitBudget) break;
+        }
+      }
+
+      // Fallback: if still empty, split digit into smaller chunks
       if (count === 0) {
         const chunks = this.splitDigitForFallback(digit);
         if (chunks.length > 1) {
@@ -166,29 +376,17 @@ export class RetrievalService {
           const mergedChunkSurfaces = new Set<string>();
           for (const c of chunks) {
             const chunkRes = await this.semanticSearchForDigit(baseQueries, c, perChunk, minSim);
-            console.log(`Digit ${digit} fallback via chunk ${c}: found ${chunkRes.length}`);
             for (const r of chunkRes) {
-              const key = `${r.surface}|${digit}`;
-              if (seenKey.has(key)) continue;
-              // avoid duplicating the same surface across chunks
               if (mergedChunkSurfaces.has(r.surface)) continue;
               mergedChunkSurfaces.add(r.surface);
-              seenKey.add(key);
-              semantic.push({
-                surface: r.surface,
-                toneDigit: digit,
-                provenance: "semantic-fallback",
-                sceneRelevanceScore: r.similarity,
-                freq: r.freq,
-              });
-              seenSurface.add(r.surface);
-              count++;
+              if (upsertSemanticCandidate(digit, r, "semantic-fallback")) count++;
               if (count >= perDigitBudget) break;
             }
             if (count >= perDigitBudget) break;
           }
         }
       }
+
       perDigit[digit] = { semantic: count, freqTop: 0, freqRandom: 0, total: count };
     }
 
@@ -199,7 +397,6 @@ export class RetrievalService {
     if (subThemeQueries.length) {
       for (const digit of digits) {
         if (alreadyFull) {
-          // Add up to 20% extra per digit
           let added = 0;
           if (perDigitSubCap <= 0) continue;
           const subRes = await this.semanticSearchForDigit(
@@ -209,17 +406,7 @@ export class RetrievalService {
             minSim,
           );
           for (const r of subRes) {
-            const key = `${r.surface}|${digit}`;
-            if (seenKey.has(key)) continue;
-            seenKey.add(key);
-            semantic.push({
-              surface: r.surface,
-              toneDigit: digit,
-              provenance: "semantic-subtheme",
-              sceneRelevanceScore: r.similarity,
-              freq: r.freq,
-            });
-            added++;
+            if (upsertSemanticCandidate(digit, r, "semantic-subtheme")) added++;
             if (added >= perDigitSubCap) break;
           }
           const stats = perDigit[digit] ?? { semantic: 0, freqTop: 0, freqRandom: 0, total: 0 };
@@ -227,7 +414,6 @@ export class RetrievalService {
           stats.total += added;
           perDigit[digit] = stats;
         } else {
-          // Not full yet: fill up to target across digits without a strict 20% cap
           if (semantic.length >= semanticTarget) break;
           const remaining = semanticTarget - semantic.length;
           const budgetThisDigit = Math.min(
@@ -244,17 +430,7 @@ export class RetrievalService {
           let added = 0;
           for (const r of subRes) {
             if (semantic.length >= semanticTarget) break;
-            const key = `${r.surface}|${digit}`;
-            if (seenKey.has(key)) continue;
-            seenKey.add(key);
-            semantic.push({
-              surface: r.surface,
-              toneDigit: digit,
-              provenance: "semantic-subtheme",
-              sceneRelevanceScore: r.similarity,
-              freq: r.freq,
-            });
-            added++;
+            if (upsertSemanticCandidate(digit, r, "semantic-subtheme")) added++;
             if (added >= budgetThisDigit) break;
           }
           const stats = perDigit[digit] ?? { semantic: 0, freqTop: 0, freqRandom: 0, total: 0 };
@@ -304,7 +480,6 @@ export class RetrievalService {
       stats.freqRandom += addedRand;
       stats.total = stats.semantic + stats.freqTop + stats.freqRandom;
       perDigit[digit] = stats;
-      console.log(`Digit ${digit}: added freq-top: ${addedTop}, freq-random: ${addedRand}`);
     }
 
     // Global frequency lists (not tied to digit):
@@ -341,9 +516,6 @@ export class RetrievalService {
       addGlobalItems(global.topChars50, "freq-global-top-char");
       addGlobalItems(global.randWords25, "freq-global-rand-word");
       addGlobalItems(global.randChars25, "freq-global-rand-char");
-      console.log(
-        `Global picks added: topWords50: ${global.topWords50.length}, topChars50: ${global.topChars50.length}, randWords25: ${global.randWords25.length}, randChars25: ${global.randChars25.length}`,
-      );
     } catch (e) {
       console.warn(`Global frequency picks failed: ${e}`);
     }
@@ -384,6 +556,7 @@ export class RetrievalService {
       total,
       perDigit,
       candidates,
+      patternSlots: slotPlan,
       warnings,
       error,
       globalPicks,
@@ -413,7 +586,7 @@ export class RetrievalService {
     const names = collections.map((c: any) => c.name as string);
     if (!names.includes(this.collectionName)) {
       // Try common fallbacks
-      const preferred = ["cantolyr_lexicon_v1_1024", "cantolyr_lexicon_v1_768"];
+      const preferred = ["cantolyr_lexicon_v1_1024", "cantolyr_lexicon_v1_1024"];
       const foundPreferred = preferred.find((n) => names.includes(n));
       if (foundPreferred) {
         console.warn(
@@ -687,20 +860,187 @@ export class RetrievalService {
     }
   }
 
+  private normalizePosTag(pos?: string): string | undefined {
+    if (!pos) return undefined;
+    const cleaned = pos.trim();
+    if (!cleaned) return undefined;
+    const direct = cleaned.toUpperCase();
+    if (ALLOWED_POS_TAGS.has(direct)) return direct;
+    const alias = POS_ALIAS[direct] ?? POS_ALIAS[cleaned.toUpperCase()];
+    if (alias && ALLOWED_POS_TAGS.has(alias)) return alias;
+    return undefined;
+  }
+
+  private buildFallbackSlots(
+    patterns: SegmentationPattern[],
+    intent: SceneIntent,
+  ): Record<string, PatternSlot[]> {
+    const focus = intent.microIntent || intent.title || "這個場景";
+    const plan: Record<string, PatternSlot[]> = {};
+    for (const pattern of patterns) {
+      const slots: PatternSlot[] = [];
+      const baseSlots = pattern.slots ? Array.isArray(pattern.slots) ? pattern.slots : [] : [];
+      if (baseSlots.length) {
+        baseSlots.forEach((slot: PatternSlot, index: number) => {
+          const toneDigit = slot.toneDigit || pattern.groups[index] || pattern.groups[0] || "";
+          const fallbackPos = this.normalizePosTag(slot.posTag) ?? DEFAULT_POS_SEQUENCE[index % DEFAULT_POS_SEQUENCE.length];
+          const normalizedPos = this.normalizePosTag(fallbackPos) ?? "NOUN";
+          const hint = POS_HINTS[normalizedPos] ?? POS_HINTS.NOUN;
+          const detail = FALLBACK_SLOT_THEMES[index % FALLBACK_SLOT_THEMES.length];
+          slots.push({
+            id: slot.id || `${pattern.id}_slot_${index}`,
+            toneDigit,
+            posTag: normalizedPos,
+            description: slot.description || `${detail}-${hint.label}`,
+            retrievalPrompt:
+              slot.retrievalPrompt || hint.template(focus, detail),
+          });
+        });
+        plan[pattern.id] = slots;
+        continue;
+      }
+
+      for (let index = 0; index < pattern.groups.length; index++) {
+        const toneDigit = pattern.groups[index];
+        const posSeed = DEFAULT_POS_SEQUENCE[index % DEFAULT_POS_SEQUENCE.length];
+        const normalizedPos = this.normalizePosTag(posSeed) ?? "NOUN";
+        const hint = POS_HINTS[normalizedPos] ?? POS_HINTS.NOUN;
+        const detail = FALLBACK_SLOT_THEMES[index % FALLBACK_SLOT_THEMES.length];
+        slots.push({
+          id: `${pattern.id}_slot_${index}`,
+          toneDigit,
+          posTag: normalizedPos,
+          description: `${detail}-${hint.label}`,
+          retrievalPrompt: hint.template(focus, detail),
+        });
+      }
+      plan[pattern.id] = slots;
+    }
+    return plan;
+  }
+
+  private async buildPatternSlotPlan(
+    patterns: SegmentationPattern[],
+    intent: SceneIntent,
+  ): Promise<Record<string, PatternSlot[]>> {
+    if (!patterns || patterns.length === 0) return {};
+    const fallbackPlan = this.buildFallbackSlots(patterns, intent);
+    if (!this.geminiApiKey) return fallbackPlan;
+    if (!this.genAI) this.genAI = new GoogleGenAI({ apiKey: this.geminiApiKey });
+
+    const result: Record<string, PatternSlot[]> = {};
+    for (const pattern of patterns) {
+      const fallbackSlots = fallbackPlan[pattern.id] ?? [];
+      const schema = {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            index: { type: "integer" },
+            toneDigit: { type: "string" },
+            posTag: { type: "string" },
+            description: { type: "string" },
+            retrievalPrompt: { type: "string" },
+          },
+          required: ["posTag", "retrievalPrompt"],
+        },
+        minItems: pattern.groups.length,
+        maxItems: pattern.groups.length,
+      } as const;
+
+      const instruction = [
+        "你是一名粵語歌詞詞性規劃助手。",
+        `主題：${intent.title}`,
+        `微場景：${intent.microIntent}`,
+        `情緒：${(intent.emotions || []).join("、")}`,
+        `聲調分組：${pattern.patternString}`,
+        "請為每個分組建立詞性槽位，輸出 JSON 陣列，每格包含 index、toneDigit、posTag(大寫)、description(≤12字)、retrievalPrompt(10-20字粵語描述)。",
+        "POS 僅可使用：NOUN, VERB, ADJ, ADV, PRON, PART, CONJ, DET, NUM, AUX, ADP, SCONJ, PROPN, INTJ, X。",
+        "retrievalPrompt 請用粵語或繁體中文，描述要檢索的詞語，例如「描述期待重逢的好友」。",
+        "僅輸出 JSON。",
+      ].join("\n");
+
+      try {
+        const response = await this.genAI.models.generateContent({
+          model: this.geminiSceneModel,
+          contents: instruction,
+          config: {
+            temperature: 0.45,
+            maxOutputTokens: 400,
+            responseMimeType: "application/json",
+            responseJsonSchema: schema as unknown,
+          },
+        });
+        const text = this.extractText(response);
+        if (!text) throw new Error("Empty slot response");
+        const jsonStart = text.indexOf("[");
+        const jsonEnd = text.lastIndexOf("]");
+        const slice = text.slice(jsonStart !== -1 ? jsonStart : 0, jsonEnd !== -1 ? jsonEnd + 1 : text.length);
+        const parsed = JSON.parse(slice);
+        if (!Array.isArray(parsed)) throw new Error("Invalid slot JSON");
+        const slots: PatternSlot[] = [];
+        for (let index = 0; index < pattern.groups.length; index++) {
+          const toneDigit = pattern.groups[index];
+          const raw = parsed[index] ?? {};
+          const normalizedPos = this.normalizePosTag(raw.posTag) ?? fallbackSlots[index]?.posTag ?? "NOUN";
+          const detail = FALLBACK_SLOT_THEMES[index % FALLBACK_SLOT_THEMES.length];
+          const hint = POS_HINTS[normalizedPos] ?? POS_HINTS.NOUN;
+          const description = typeof raw.description === "string" && raw.description.trim().length > 0
+            ? raw.description.trim()
+            : (fallbackSlots[index]?.description ?? `${detail}-${hint.label}`);
+          const retrievalPrompt = typeof raw.retrievalPrompt === "string" && raw.retrievalPrompt.trim().length > 0
+            ? raw.retrievalPrompt.trim()
+            : (fallbackSlots[index]?.retrievalPrompt ?? hint.template(intent.microIntent || intent.title || "這個場景", detail));
+          slots.push({
+            id: `${pattern.id}_slot_${index}`,
+            toneDigit: String(raw.toneDigit || toneDigit || fallbackSlots[index]?.toneDigit || ""),
+            posTag: normalizedPos,
+            description,
+            retrievalPrompt,
+          });
+        }
+        result[pattern.id] = slots;
+      } catch (err) {
+        console.warn(
+          `Slot inference failed for pattern ${pattern.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        result[pattern.id] = fallbackSlots;
+      }
+    }
+
+    return result;
+  }
+
   private async semanticSearchForDigit(
     queries: string[],
     digit: string,
     budget: number,
     minSimilarity?: number,
-  ): Promise<Array<{ surface: string; similarity: number; freq?: number }>> {
+    options?: { posTag?: string; slot?: PatternSlot },
+  ): Promise<Array<{
+    surface: string;
+    similarity: number;
+    freq?: number;
+    posTag?: string;
+    slotId?: string;
+    prompt?: string;
+  }>> {
     if (!this.chromaClient) throw new Error(LyricErrorCode.ERROR_DATABASE_UNAVAILABLE);
     await this.ensureChromaCollection();
     const coll = this.chromaCollection!;
     // Align with scripts/test-chroma.ts: build where dynamically and pass only when non-empty
-    const where: Record<string, unknown> = {};
-    if (digit) where.pronunciation = String(digit);
+    const filters: Array<Record<string, unknown>> = [];
+    if (digit) {
+      filters.push({ pronunciation: { "$eq": String(digit) } });
+    }
+    if (options?.posTag) {
+      filters.push({ pos: { "$eq": String(options.posTag).toUpperCase() } });
+    }
+    let where: Record<string, unknown> | undefined;
+    if (filters.length === 1) where = filters[0];
+    else if (filters.length > 1) where = { "$and": filters };
     const perQuery = Math.max(5, Math.ceil(budget / Math.max(1, queries.length)) * 2);
-    const merged: Record<string, { surface: string; similarity: number; freq?: number }> = {};
+    const merged: Record<string, { surface: string; similarity: number; freq?: number; pos?: string }> = {};
     let usedServerFilter = false;
     for (const q of queries) {
       const emb = await this.embed(q);
@@ -708,7 +1048,7 @@ export class RetrievalService {
         queryEmbeddings: [emb],
         nResults: perQuery,
         include: ["documents", "metadatas", "distances"],
-        where: Object.keys(where).length > 0
+        where: where
           ? ((usedServerFilter = true), (where as any))
           : undefined,
       });
@@ -723,7 +1063,12 @@ export class RetrievalService {
         const sim = dists[i] != null ? 1 - Number(dists[i]) : 0;
         const prev = merged[surface];
         if (!prev || sim > prev.similarity) {
-          merged[surface] = { surface, similarity: sim, freq: md?.freq };
+          merged[surface] = {
+            surface,
+            similarity: sim,
+            freq: md?.freq,
+            pos: typeof md?.pos === "string" ? md.pos.toUpperCase() : undefined,
+          };
         }
       }
     }
@@ -747,20 +1092,41 @@ export class RetrievalService {
           const sim = dists[i] != null ? 1 - Number(dists[i]) : 0;
           const prev = merged[surface];
           if (!prev || sim > prev.similarity) {
-            merged[surface] = { surface, similarity: sim, freq: md?.freq };
+            merged[surface] = {
+              surface,
+              similarity: sim,
+              freq: md?.freq,
+              pos: typeof md?.pos === "string" ? md.pos.toUpperCase() : undefined,
+            };
           }
         }
       }
     }
     // Sort and apply similarity threshold post-hoc with adaptive relaxation
     const all = Object.values(merged).sort((a, b) => b.similarity - a.similarity);
-    if (minSimilarity == null) return all.slice(0, budget * 3);
+    if (minSimilarity == null) {
+      return all.slice(0, budget * 3).map((item) => ({
+        surface: item.surface,
+        similarity: item.similarity,
+        freq: item.freq,
+        posTag: item.pos ?? options?.posTag,
+        slotId: options?.slot?.id,
+        prompt: options?.slot?.retrievalPrompt,
+      }));
+    }
     let filtered = all.filter((x) => x.similarity >= minSimilarity);
     if (filtered.length === 0) {
       const relaxed = Math.max(0.5, minSimilarity - 0.1);
       filtered = all.filter((x) => x.similarity >= relaxed);
     }
-    return (filtered.length ? filtered : all).slice(0, budget * 3);
+    return (filtered.length ? filtered : all).slice(0, budget * 3).map((item) => ({
+      surface: item.surface,
+      similarity: item.similarity,
+      freq: item.freq,
+      posTag: item.pos ?? options?.posTag,
+      slotId: options?.slot?.id,
+      prompt: options?.slot?.retrievalPrompt,
+    }));
   }
 
   private async getFrequencyEnrichmentForDigit(
@@ -802,11 +1168,6 @@ export class RetrievalService {
       randomSlice.push(slice[idx]);
       slice.splice(idx, 1);
     }
-    console.log(
-      `Digit ${digit}: top 10: ${top.map((x) => x.surface).join(", ")}, random from 11-100: ${
-        randomSlice.map((x) => x.surface).join(", ")
-      }`,
-    );
     return { top, randomSlice };
   }
 
@@ -856,13 +1217,7 @@ export class RetrievalService {
     };
     const randWords25 = sample(wordSlice, 25);
     const randChars25 = sample(charSlice, 25);
-    console.log(
-      `Global: topWords50: ${topWords50.map((x) => x.surface).join(", ")}, topChars50: ${
-        topChars50.map((x) => x.surface).join(", ")
-      }, randWords25: ${randWords25.map((x) => x.surface).join(", ")}, randChars25: ${
-        randChars25.map((x) => x.surface).join(", ")
-      }`,
-    );
+
     return { topWords50, topChars50, randWords25, randChars25 };
   }
 

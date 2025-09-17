@@ -3,19 +3,17 @@ import { createSegmentationPattern, SegmentationPattern } from "./entities.ts";
 import { validateSegmentationPattern } from "./validation.ts";
 import { createSeedRng } from "../../shared/utils/seed-rng.ts";
 
-// Allowed digits: any combination of 0,2,3,4,5,9 for groups of 1-4 digits.
-// Probabilities: 50% single digit, 40% double, 5% triple, 5% quadruple.
+// Allowed digits: any combination of 0,2,3,4,5,9 for groups of 1-2 digits.
+// Probabilities: 50% single digit, 50% double digit. No 3- or 4-digit groups.
 
 const ALLOWED_DIGITS = new Set(["0", "2", "3", "4", "5", "9"]);
 const GROUP_SIZE_PROBS = [
   { size: 1, prob: 0.50 },
-  { size: 2, prob: 0.40 },
-  { size: 3, prob: 0.05 },
-  { size: 4, prob: 0.05 },
+  { size: 2, prob: 0.50 },
 ];
 
 function isValidGroup(g: string): boolean {
-  return g.length >= 1 && g.length <= 4 && [...g].every((ch) => ALLOWED_DIGITS.has(ch));
+  return g.length >= 1 && g.length <= 2 && [...g].every((ch) => ALLOWED_DIGITS.has(ch));
 }
 
 function greedyPairs(seq: string): string[] {
@@ -23,21 +21,12 @@ function greedyPairs(seq: string): string[] {
   for (let i = 0; i < seq.length;) {
     if (i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) && ALLOWED_DIGITS.has(seq[i + 1])) {
       const group = seq.slice(i, i + 2);
-      if (!groups.includes(group)) {
-        groups.push(group);
-        i += 2;
-      } else {
-        groups.push(seq[i]);
-        i += 1;
-      }
+      groups.push(group);
+      i += 2;
     } else {
       const group = seq[i];
-      if (!groups.includes(group)) {
-        groups.push(group);
-        i += 1;
-      } else {
-        i += 1; // skip duplicate
-      }
+      groups.push(group);
+      i += 1;
     }
   }
   return groups;
@@ -50,35 +39,17 @@ function alternatingStartOne(seq: string): string[] {
   while (i < seq.length) {
     if (toggle) {
       const group = seq[i];
-      if (!groups.includes(group)) {
-        groups.push(group);
-        i += 1;
-      } else {
-        i += 1; // skip duplicate
-      }
+      groups.push(group);
+      i += 1;
     } else {
       if (i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) && ALLOWED_DIGITS.has(seq[i + 1])) {
         const group = seq.slice(i, i + 2);
-        if (!groups.includes(group)) {
-          groups.push(group);
-          i += 2;
-        } else {
-          const single = seq[i];
-          if (!groups.includes(single)) {
-            groups.push(single);
-            i += 1;
-          } else {
-            i += 1; // skip
-          }
-        }
+        groups.push(group);
+        i += 2;
       } else {
         const group = seq[i];
-        if (!groups.includes(group)) {
-          groups.push(group);
-          i += 1;
-        } else {
-          i += 1; // skip duplicate
-        }
+        groups.push(group);
+        i += 1;
       }
     }
     toggle = !toggle;
@@ -94,35 +65,17 @@ function alternatingStartTwo(seq: string): string[] {
     if (toggle) {
       if (i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) && ALLOWED_DIGITS.has(seq[i + 1])) {
         const group = seq.slice(i, i + 2);
-        if (!groups.includes(group)) {
-          groups.push(group);
-          i += 2;
-        } else {
-          const single = seq[i];
-          if (!groups.includes(single)) {
-            groups.push(single);
-            i += 1;
-          } else {
-            i += 1; // skip
-          }
-        }
+        groups.push(group);
+        i += 2;
       } else {
         const group = seq[i];
-        if (!groups.includes(group)) {
-          groups.push(group);
-          i += 1;
-        } else {
-          i += 1; // skip duplicate
-        }
+        groups.push(group);
+        i += 1;
       }
     } else {
       const group = seq[i];
-      if (!groups.includes(group)) {
-        groups.push(group);
-        i += 1;
-      } else {
-        i += 1; // skip duplicate
-      }
+      groups.push(group);
+      i += 1;
     }
     toggle = !toggle;
   }
@@ -155,18 +108,14 @@ function randomMixAllowed(seq: string, rnd: { random: () => number }): string[] 
     }
     const end = Math.min(i + size, seq.length);
     const group = seq.slice(i, end);
-    if (isValidGroup(group) && !groups.includes(group)) {
+    if (isValidGroup(group)) {
       groups.push(group);
       i = end;
     } else {
-      // fallback to single digit if invalid or duplicate
+      // fallback to single digit if invalid
       const single = seq[i];
-      if (!groups.includes(single)) {
-        groups.push(single);
-        i += 1;
-      } else {
-        i += 1; // skip duplicate
-      }
+      groups.push(single);
+      i += 1;
     }
   }
   return groups;
@@ -185,12 +134,10 @@ function maybeSplitOneComposite(groups: string[], rnd: { random: () => number })
     } else if (g.length === 4) {
       newGroups = [g.slice(0, 2), g.slice(2)];
     }
-    // Check if any new group is already in out
-    const canSplit = newGroups.every((ng) => !out.includes(ng));
-    if (canSplit) {
+    // Replace the composite group with its split parts regardless of duplicates
+    if (newGroups.length) {
       out.splice(compositeIdx, 1, ...newGroups);
     }
-    // else leave as is
   }
   return out;
 }
@@ -216,12 +163,25 @@ export function generatePatterns(toneSequence: string, seed?: number): Segmentat
   // Dedupe by pattern string
   const seen = new Set<string>();
   const unique: string[][] = [];
-  for (const g of candidates) {
+  const addUnique = (g: string[]) => {
     const key = g.join(" ");
     if (!seen.has(key)) {
       seen.add(key);
       unique.push(g);
     }
+  };
+  for (const g of candidates) addUnique(g);
+
+  // Keep generating randomized variants until we have at least 3 unique patterns (or max attempts)
+  let attempts = 0;
+  const MAX_ATTEMPTS = 50;
+  while (unique.length < 3 && attempts < MAX_ATTEMPTS) {
+    attempts++;
+    const v1 = randomMixAllowed(toneSequence, rng);
+    addUnique(v1);
+    if (unique.length >= 3) break;
+    const v2 = maybeSplitOneComposite(greedyPairs(toneSequence), rng);
+    addUnique(v2);
   }
 
   // Shuffle deterministically and pick first 3
@@ -232,9 +192,19 @@ export function generatePatterns(toneSequence: string, seed?: number): Segmentat
     [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
   }
   const chosen = idxs.slice(0, 3).map((i) => unique[i]);
+  // Absolute fallback: if still < 3 unique (very unlikely), synthesize variants deterministically
   while (chosen.length < 3) {
-    // fallback: fill with alternatingStartOne to ensure exactly 3
-    chosen.push(alternatingStartOne(toneSequence));
+    const extra = alternatingStartOne(toneSequence);
+    // Avoid duplicates if possible by tweaking with maybeSplitOneComposite
+    const tweaked = maybeSplitOneComposite(extra, rng);
+    const k = tweaked.join(" ");
+    if (!seen.has(k)) {
+      seen.add(k);
+      chosen.push(tweaked);
+    } else {
+      // last resort: push extra even if duplicate to prevent infinite loop
+      chosen.push(extra);
+    }
   }
 
   const patterns = chosen.map((g, i) => createSegmentationPattern(g, i));

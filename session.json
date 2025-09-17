@@ -1,70 +1,213 @@
 {
   "meta": {
-    "feature": "cantonese-tone-constrained",
+    "feature": "lyrics-generation",
     "version": 1,
-    "createdAt": "2025-09-16T07:04:19.713Z",
-    "seed": 188963,
-    "lineCount": 2
+    "createdAt": "2025-09-17T13:11:53.991Z",
+    "seed": 229481,
+    "lineCount": 3
   },
   "lines": [
     {
       "lineIndex": 0,
-      "toneSequence": "39405223",
+      "toneSequence": "225339",
       "digitSet": [
-        "3",
-        "9",
-        "40",
-        "5",
         "22",
+        "53",
         "39",
-        "52",
-        "23"
+        "2",
+        "25",
+        "3",
+        "5",
+        "33",
+        "9"
       ],
       "patterns": [
         {
-          "id": "pat_0_3_9_40_5_22",
-          "patternString": "3 9 40 5 22",
+          "id": "pat_0_22_53_39",
+          "patternString": "22 53 39",
           "groups": [
+            "22",
+            "53",
+            "39"
+          ],
+          "slots": [
+            {
+              "id": "pat_0_22_53_39_slot_0",
+              "toneDigit": "22",
+              "posTag": "NOUN",
+              "description": "指短暫的會面",
+              "retrievalPrompt": "短暫的相遇"
+            },
+            {
+              "id": "pat_0_22_53_39_slot_1",
+              "toneDigit": "22",
+              "posTag": "VERB",
+              "description": "表達想再見面的願望",
+              "retrievalPrompt": "期待再次相見"
+            },
+            {
+              "id": "pat_0_22_53_39_slot_2",
+              "toneDigit": "53",
+              "posTag": "ADV",
+              "description": "指時間上的預期",
+              "retrievalPrompt": "不久的將來"
+            }
+          ]
+        },
+        {
+          "id": "pat_1_2_25_3_39",
+          "patternString": "2 25 3 39",
+          "groups": [
+            "2",
+            "25",
             "3",
-            "9",
-            "40",
+            "39"
+          ],
+          "slots": [
+            {
+              "id": "pat_1_2_25_3_39_slot_0",
+              "toneDigit": "2",
+              "posTag": "VERB",
+              "description": "希望再見",
+              "retrievalPrompt": "表達希望再次見面的動詞"
+            },
+            {
+              "id": "pat_1_2_25_3_39_slot_1",
+              "toneDigit": "2",
+              "posTag": "NOUN",
+              "description": "短暫相遇",
+              "retrievalPrompt": "描述短暫相遇的名詞"
+            },
+            {
+              "id": "pat_1_2_25_3_39_slot_2",
+              "toneDigit": "5",
+              "posTag": "ADV",
+              "description": "將來",
+              "retrievalPrompt": "表達未來時間的副詞"
+            },
+            {
+              "id": "pat_1_2_25_3_39_slot_3",
+              "toneDigit": "3",
+              "posTag": "PART",
+              "description": "期待",
+              "retrievalPrompt": "表達期待的語氣助詞"
+            }
+          ]
+        },
+        {
+          "id": "pat_2_22_5_33_9",
+          "patternString": "22 5 33 9",
+          "groups": [
+            "22",
             "5",
-            "22"
-          ]
-        },
-        {
-          "id": "pat_1_39_40_52_23",
-          "patternString": "39 40 52 23",
-          "groups": [
-            "39",
-            "40",
-            "52",
-            "23"
-          ]
-        },
-        {
-          "id": "pat_2_3_9_40_52_23",
-          "patternString": "3 9 40 52 23",
-          "groups": [
-            "3",
-            "9",
-            "40",
-            "52",
-            "23"
+            "33",
+            "9"
+          ],
+          "slots": [
+            {
+              "id": "pat_2_22_5_33_9_slot_0",
+              "toneDigit": "22",
+              "posTag": "ADJ",
+              "description": "形容相遇時間很短",
+              "retrievalPrompt": "形容短暫的相遇"
+            },
+            {
+              "id": "pat_2_22_5_33_9_slot_1",
+              "toneDigit": "5",
+              "posTag": "VERB",
+              "description": "表達想再見面的願望",
+              "retrievalPrompt": "表達想再見面的心情"
+            },
+            {
+              "id": "pat_2_22_5_33_9_slot_2",
+              "toneDigit": "33",
+              "posTag": "ADV",
+              "description": "表示下次再見的承諾",
+              "retrievalPrompt": "表示下次再見"
+            },
+            {
+              "id": "pat_2_22_5_33_9_slot_3",
+              "toneDigit": "9",
+              "posTag": "PART",
+              "description": "語氣詞，表達期待",
+              "retrievalPrompt": "語氣詞，表示期待"
+            }
           ]
         }
       ],
       "candidatePoolStats": {
-        "total": 990,
-        "semanticCount": 189,
+        "total": 1739,
+        "semanticCount": 978,
         "freqTopCount": 71,
-        "freqRandomCount": 730
+        "freqRandomCount": 690
       },
       "topSentences": [],
       "topParagraphCandidates": [
-        "初友結緣偶會面\n今年少年邂逅動心\n今友結緣邂逅遇啱",
-        "初友結緣偶會面\n今年少年邂逅動心\n啱友結緣邂逅未婚",
-        "初友結緣偶會面\n今年少年邂逅動心\n初聯接頭偶遇立刻"
+        "陌路履新恰巧\n遇下午先不久\n狹義訝即將嗱",
+        "陌路履新恰巧\n遇下午先不久\n面熟戀初初嘅",
+        "陌路履新恰巧\n願密友先不久\n狹義訝即將嗱"
+      ],
+      "allLineCandidates": [
+        {
+          "text": "序幕上妝不久",
+          "patternId": "pat_0_22_53_39"
+        },
+        {
+          "text": "陌路履新恰巧",
+          "patternId": "pat_0_22_53_39"
+        },
+        {
+          "text": "豔遇滿足一起",
+          "patternId": "pat_0_22_53_39"
+        },
+        {
+          "text": "互動處於剛好",
+          "patternId": "pat_0_22_53_39"
+        },
+        {
+          "text": "近代暖身一早",
+          "patternId": "pat_0_22_53_39"
+        },
+        {
+          "text": "遇下午先不久",
+          "patternId": "pat_1_2_25_3_39"
+        },
+        {
+          "text": "逅用語先初戀",
+          "patternId": "pat_1_2_25_3_39"
+        },
+        {
+          "text": "遇上午相新手",
+          "patternId": "pat_1_2_25_3_39"
+        },
+        {
+          "text": "願密友先不久",
+          "patternId": "pat_1_2_25_3_39"
+        },
+        {
+          "text": "望慧眼先光景",
+          "patternId": "pat_1_2_25_3_39"
+        },
+        {
+          "text": "狹義仰匆匆啦",
+          "patternId": "pat_2_22_5_33_9"
+        },
+        {
+          "text": "合用邂開初也",
+          "patternId": "pat_2_22_5_33_9"
+        },
+        {
+          "text": "面熟戀初初嘅",
+          "patternId": "pat_2_22_5_33_9"
+        },
+        {
+          "text": "狹義訝即將嗱",
+          "patternId": "pat_2_22_5_33_9"
+        },
+        {
+          "text": "特定似一一啦",
+          "patternId": "pat_2_22_5_33_9"
+        }
       ],
       "warnings": [
         "WARN_LOW_FREQUENCY"
@@ -72,63 +215,406 @@
     },
     {
       "lineIndex": 1,
-      "toneSequence": "4200520",
+      "toneSequence": "4259",
       "digitSet": [
-        "4",
-        "20",
-        "0",
-        "52",
-        "2",
         "42",
-        "05"
+        "59",
+        "4",
+        "25",
+        "9",
+        "5"
       ],
       "patterns": [
         {
-          "id": "pat_0_4_20_0_52",
-          "patternString": "4 20 0 52",
-          "groups": [
-            "4",
-            "20",
-            "0",
-            "52"
-          ]
-        },
-        {
-          "id": "pat_1_4_2_0_52",
-          "patternString": "4 2 0 52",
-          "groups": [
-            "4",
-            "2",
-            "0",
-            "52"
-          ]
-        },
-        {
-          "id": "pat_2_42_0_05_2",
-          "patternString": "42 0 05 2",
+          "id": "pat_0_42_59",
+          "patternString": "42 59",
           "groups": [
             "42",
-            "0",
-            "05",
-            "2"
+            "59"
+          ],
+          "slots": [
+            {
+              "id": "pat_0_42_59_slot_0",
+              "toneDigit": "42",
+              "posTag": "NOUN",
+              "description": "描述這次短暫的相遇",
+              "retrievalPrompt": "短暫的相遇"
+            },
+            {
+              "id": "pat_0_42_59_slot_1",
+              "toneDigit": "42",
+              "posTag": "VERB",
+              "description": "表達希望下次再見",
+              "retrievalPrompt": "表達期待下次見面"
+            }
+          ]
+        },
+        {
+          "id": "pat_1_4_25_9",
+          "patternString": "4 25 9",
+          "groups": [
+            "4",
+            "25",
+            "9"
+          ],
+          "slots": [
+            {
+              "id": "pat_1_4_25_9_slot_0",
+              "toneDigit": "4",
+              "posTag": "VERB",
+              "description": "希望再見",
+              "retrievalPrompt": "表達希望下次能再見面的動詞"
+            },
+            {
+              "id": "pat_1_4_25_9_slot_1",
+              "toneDigit": "2",
+              "posTag": "NOUN",
+              "description": "短暫相遇",
+              "retrievalPrompt": "描述這次短暫相遇的名詞"
+            },
+            {
+              "id": "pat_1_4_25_9_slot_2",
+              "toneDigit": "5",
+              "posTag": "ADJ",
+              "description": "期待的",
+              "retrievalPrompt": "形容期待下次見面的形容詞"
+            }
+          ]
+        },
+        {
+          "id": "pat_2_42_5_9",
+          "patternString": "42 5 9",
+          "groups": [
+            "42",
+            "5",
+            "9"
+          ],
+          "slots": [
+            {
+              "id": "pat_2_42_5_9_slot_0",
+              "toneDigit": "42",
+              "posTag": "ADJ",
+              "description": "短暫相遇但情意綿綿",
+              "retrievalPrompt": "形容短暫相遇但情意綿綿"
+            },
+            {
+              "id": "pat_2_42_5_9_slot_1",
+              "toneDigit": "5",
+              "posTag": "VERB",
+              "description": "表達下次再見的期盼",
+              "retrievalPrompt": "表達下次再見的期盼"
+            },
+            {
+              "id": "pat_2_42_5_9_slot_2",
+              "toneDigit": "9",
+              "posTag": "ADV",
+              "description": "期待重逢的時光",
+              "retrievalPrompt": "表示期待重逢的時光"
+            }
           ]
         }
       ],
       "candidatePoolStats": {
-        "total": 894,
-        "semanticCount": 160,
-        "freqTopCount": 66,
-        "freqRandomCount": 668
+        "total": 1580,
+        "semanticCount": 1092,
+        "freqTopCount": 46,
+        "freqRandomCount": 442
       },
       "topSentences": [],
       "topParagraphCandidates": [
-        "結近年逢偶遇\n結遇情邂逅\n最近朋朋友遇",
-        "結近年逢偶遇\n結遇情邂逅\n再會聯情緒繫",
-        "結近年逢偶遇\n結遇情邂逅\n見面逢朋友逅"
+        "際遇往返\n盼字眼悱\n絢麗邂久",
+        "際遇倍感\n惜字眼悱\n細密戀久",
+        "際遇有請\n靠用語忳\n瑰麗戀豈"
+      ],
+      "allLineCandidates": [
+        {
+          "text": "際遇往返",
+          "patternId": "pat_0_42_59"
+        },
+        {
+          "text": "際遇倍感",
+          "patternId": "pat_0_42_59"
+        },
+        {
+          "text": "際遇有請",
+          "patternId": "pat_0_42_59"
+        },
+        {
+          "text": "際遇挽手",
+          "patternId": "pat_0_42_59"
+        },
+        {
+          "text": "際遇抱擁",
+          "patternId": "pat_0_42_59"
+        },
+        {
+          "text": "盼字眼悱",
+          "patternId": "pat_1_4_25_9"
+        },
+        {
+          "text": "惜字眼悱",
+          "patternId": "pat_1_4_25_9"
+        },
+        {
+          "text": "靠用語忳",
+          "patternId": "pat_1_4_25_9"
+        },
+        {
+          "text": "盼伴侶悱",
+          "patternId": "pat_1_4_25_9"
+        },
+        {
+          "text": "覬忌諱悱",
+          "patternId": "pat_1_4_25_9"
+        },
+        {
+          "text": "絢麗邂久",
+          "patternId": "pat_2_42_5_9"
+        },
+        {
+          "text": "暗淡挽唯",
+          "patternId": "pat_2_42_5_9"
+        },
+        {
+          "text": "瑰麗戀豈",
+          "patternId": "pat_2_42_5_9"
+        },
+        {
+          "text": "細密戀久",
+          "patternId": "pat_2_42_5_9"
+        },
+        {
+          "text": "細膩恃唯",
+          "patternId": "pat_2_42_5_9"
+        }
       ],
       "warnings": [
         "WARN_LOW_FREQUENCY"
       ]
+    },
+    {
+      "lineIndex": 2,
+      "toneSequence": "334334",
+      "digitSet": [
+        "3",
+        "34",
+        "33",
+        "43",
+        "4"
+      ],
+      "patterns": [
+        {
+          "id": "pat_0_3_34_3_34",
+          "patternString": "3 34 3 34",
+          "groups": [
+            "3",
+            "34",
+            "3",
+            "34"
+          ],
+          "slots": [
+            {
+              "id": "pat_0_3_34_3_34_slot_0",
+              "toneDigit": "3",
+              "posTag": "PRON",
+              "description": "指代對象",
+              "retrievalPrompt": "指代剛認識但有好感的人"
+            },
+            {
+              "id": "pat_0_3_34_3_34_slot_1",
+              "toneDigit": "34",
+              "posTag": "VERB",
+              "description": "短暫相遇",
+              "retrievalPrompt": "描述短暫的相遇"
+            },
+            {
+              "id": "pat_0_3_34_3_34_slot_2",
+              "toneDigit": "3",
+              "posTag": "ADV",
+              "description": "希望再見的時間",
+              "retrievalPrompt": "表達希望再次見面的時間"
+            },
+            {
+              "id": "pat_0_3_34_3_34_slot_3",
+              "toneDigit": "34",
+              "posTag": "VERB",
+              "description": "期待再見",
+              "retrievalPrompt": "表達期待再次見面的心情"
+            }
+          ]
+        },
+        {
+          "id": "pat_1_33_43_34",
+          "patternString": "33 43 34",
+          "groups": [
+            "33",
+            "43",
+            "34"
+          ],
+          "slots": [
+            {
+              "id": "pat_1_33_43_34_slot_0",
+              "toneDigit": "33",
+              "posTag": "ADJ",
+              "description": "愉快地",
+              "retrievalPrompt": "形容這次偶遇令人愉快"
+            },
+            {
+              "id": "pat_1_33_43_34_slot_1",
+              "toneDigit": "33",
+              "posTag": "VERB",
+              "description": "期待再會",
+              "retrievalPrompt": "表達希望下次再見"
+            },
+            {
+              "id": "pat_1_33_43_34_slot_2",
+              "toneDigit": "43",
+              "posTag": "ADV",
+              "description": "短暫地",
+              "retrievalPrompt": "表示這次相遇的時間很短"
+            }
+          ]
+        },
+        {
+          "id": "pat_2_3_3_4_3_3_4",
+          "patternString": "3 3 4 3 3 4",
+          "groups": [
+            "3",
+            "3",
+            "4",
+            "3",
+            "3",
+            "4"
+          ],
+          "slots": [
+            {
+              "id": "pat_2_3_3_4_3_3_4_slot_0",
+              "toneDigit": "3",
+              "posTag": "ADJ",
+              "description": "形容初次見面但感覺不錯",
+              "retrievalPrompt": "形容初次見面但感覺不錯"
+            },
+            {
+              "id": "pat_2_3_3_4_3_3_4_slot_1",
+              "toneDigit": "3",
+              "posTag": "VERB",
+              "description": "表達希望再次見面的動詞",
+              "retrievalPrompt": "表達希望再次見面的動詞"
+            },
+            {
+              "id": "pat_2_3_3_4_3_3_4_slot_2",
+              "toneDigit": "4",
+              "posTag": "NOUN",
+              "description": "指代這次短暫的相遇",
+              "retrievalPrompt": "指代這次短暫的相遇"
+            },
+            {
+              "id": "pat_2_3_3_4_3_3_4_slot_3",
+              "toneDigit": "3",
+              "posTag": "ADV",
+              "description": "表示未來某個時間點",
+              "retrievalPrompt": "表示未來某個時間點"
+            },
+            {
+              "id": "pat_2_3_3_4_3_3_4_slot_4",
+              "toneDigit": "3",
+              "posTag": "VERB",
+              "description": "表達期待再次見面的動詞",
+              "retrievalPrompt": "表達期待再次見面的動詞"
+            },
+            {
+              "id": "pat_2_3_3_4_3_3_4_slot_5",
+              "toneDigit": "4",
+              "posTag": "NOUN",
+              "description": "指代未來重逢的約定",
+              "retrievalPrompt": "指代未來重逢的約定"
+            }
+          ]
+        }
+      ],
+      "candidatePoolStats": {
+        "total": 1612,
+        "semanticCount": 1132,
+        "freqTopCount": 45,
+        "freqRandomCount": 435
+      },
+      "topSentences": [],
+      "topParagraphCandidates": [
+        "今相見佳相約\n相關掛心牽掛\n初憶意今邀昨",
+        "今相見佳相約\n相關掛心牽掛\n初憶意今邀昨",
+        "今相見佳相約\n相關掛心牽掛\n初憶意今邀昨"
+      ],
+      "allLineCandidates": [
+        {
+          "text": "今相見佳相約",
+          "patternId": "pat_0_3_34_3_34"
+        },
+        {
+          "text": "憶抒發思牽掛",
+          "patternId": "pat_0_3_34_3_34"
+        },
+        {
+          "text": "初牽涉邀拉線",
+          "patternId": "pat_0_3_34_3_34"
+        },
+        {
+          "text": "挽希冀牽拜拜",
+          "patternId": "pat_0_3_34_3_34"
+        },
+        {
+          "text": "今關切新相見",
+          "patternId": "pat_0_3_34_3_34"
+        },
+        {
+          "text": "相關掛心牽掛",
+          "patternId": "pat_1_33_43_34"
+        },
+        {
+          "text": "開心記得抒發",
+          "patternId": "pat_1_33_43_34"
+        },
+        {
+          "text": "歡欣三思牽涉",
+          "patternId": "pat_1_33_43_34"
+        },
+        {
+          "text": "一般覺得拉線",
+          "patternId": "pat_1_33_43_34"
+        },
+        {
+          "text": "相關構思希冀",
+          "patternId": "pat_1_33_43_34"
+        },
+        {
+          "text": "初憶意今邀昨",
+          "patternId": "pat_2_3_3_4_3_3_4"
+        },
+        {
+          "text": "新思態需遭際",
+          "patternId": "pat_2_3_3_4_3_3_4"
+        },
+        {
+          "text": "慇偎志吩歡次",
+          "patternId": "pat_2_3_3_4_3_3_4"
+        },
+        {
+          "text": "啱瞻節時給故",
+          "patternId": "pat_2_3_3_4_3_3_4"
+        },
+        {
+          "text": "粘繙讖該看餞",
+          "patternId": "pat_2_3_3_4_3_3_4"
+        }
+      ],
+      "warnings": [
+        "WARN_LOW_SEMANTIC",
+        "WARN_LOW_FREQUENCY"
+      ]
     }
+  ],
+  "topOutputs": [
+    "序幕上妝不久\n際遇往返\n今相見佳相約",
+    "序幕上妝不久\n際遇往返\n今相見佳相約",
+    "序幕上妝不久\n際遇往返\n今相見佳相約"
   ]
 }

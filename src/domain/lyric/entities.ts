@@ -9,10 +9,19 @@ export interface ToneSequence {
   groups: ToneGroup[]; // segmentation groups (1-2 digits) optional depending on pattern
 }
 
+export interface PatternSlot {
+  id: string; // e.g. `${patternId}_slot_${index}`
+  toneDigit: ToneGroup;
+  posTag: string; // canonical uppercase POS tag (e.g., NOUN, VERB, ADJ)
+  description: string; // short description of the slot role
+  retrievalPrompt: string; // natural-language hint for semantic retrieval
+}
+
 export interface SegmentationPattern {
   id: string; // deterministic id from algorithm (e.g., hash or incremental)
   groups: ToneGroup[]; // e.g. ["22","53","39","42","59"]
   patternString: string; // groups joined by space for readability
+  slots?: PatternSlot[]; // optional slot metadata provided at retrieval time
 }
 
 export interface SceneIntent {
@@ -70,6 +79,7 @@ export function createSegmentationPattern(groups: ToneGroup[], index: number): S
     id: `pat_${index}_${groups.join("_")}`,
     groups: [...groups],
     patternString: groups.join(" "),
+    slots: [],
   };
 }
 

@@ -3,7 +3,8 @@
 // Placeholder deterministic logic until LLM + tone mapping adapters are wired.
 
 import { LyricErrorCode, LyricWarningCode } from "../../shared/lyric-codes.ts";
-import { SegmentationPattern } from "../../domain/lyric/entities.ts";
+import { PatternSlot, SegmentationPattern } from "../../domain/lyric/entities.ts";
+import { generatePatterns } from "../../domain/lyric/segmentation.ts";
 import { validate as toneValidate } from "../../domain/lyric/tone-compliance.ts";
 import { GoogleGenAI } from "@google/genai";
 
@@ -27,6 +28,11 @@ export interface LexicalCandidate {
   surface: string;
   toneDigit: string;
   provenance: string;
+  posTag?: string;
+  slotMatches?: string[];
+  sourcePrompt?: string;
+  sceneRelevanceScore?: number;
+  freq?: number;
 }
 
 export interface GenerationRequest {
@@ -129,58 +135,42 @@ export class GenerationService {
     const selectedPatterns = req.patterns.slice(0, 3);
     const variantsPerPattern = Math.max(1, Math.min(5, req.config.variantsPerPattern || 5));
 
-    // Build candidate maps by digit and capture global frequency items (no specific digit)
-    const byDigitSemantic: Record<string, string[]> = {};
-    const byDigitRefine: Record<string, string[]> = {};
-    const globalRefine: string[] = [];
-    for (const c of req.candidatePool) {
-      const prov = (c.provenance || "").toLowerCase();
-      if (c.toneDigit) {
-        // Enforce that surface length matches the digit group length (e.g., '39' => 2 characters)
-        const expectLen = c.toneDigit.length;
-        if (c.surface.length !== expectLen) continue;
-        if (prov.startsWith("semantic")) (byDigitSemantic[c.toneDigit] ||= []).push(c.surface);
-        else if (prov.startsWith("freq")) (byDigitRefine[c.toneDigit] ||= []).push(c.surface);
-      } else if (prov.startsWith("freq-global")) {
-        globalRefine.push(c.surface);
-      }
-    }
-    const cap = (arr?: string[], n = 36) => Array.from(new Set(arr || [])).slice(0, n);
-    for (const k of Object.keys(byDigitSemantic)) byDigitSemantic[k] = cap(byDigitSemantic[k], 40);
-    for (const k of Object.keys(byDigitRefine)) byDigitRefine[k] = cap(byDigitRefine[k], 24);
-    const cappedGlobal = cap(globalRefine, 24);
-    if (cappedGlobal.length) {
-      // Merge a small slice of global into every digit used by selected patterns
-      const digitsInUse = new Set<string>();
-      for (const p of selectedPatterns) for (const g of p.groups) digitsInUse.add(g);
-      for (const d of Array.from(digitsInUse)) {
-        const arr = byDigitRefine[d] ||= [];
-        // merge up to 8 global items not already included
-        for (const s of cappedGlobal) {
-          if (arr.length >= 32) break;
-          if (!arr.includes(s)) arr.push(s);
-        }
-        byDigitRefine[d] = cap(arr, 32);
-      }
-    }
+    const { candidateByKey, byDigitSemantic, byDigitAll } = this.prepareCandidatePools(
+      selectedPatterns,
+      req.candidatePool,
+    );
 
-    const sentences: SentenceCandidate[] = [];
+    // Ensure we have 3 feasible patterns (each digit group has candidates)
+    const feasiblePatterns = this.ensureFeasiblePatterns(selectedPatterns, byDigitAll);
+
+  const sentences: SentenceCandidate[] = [];
+  const perPatternCounts: Record<string, number> = {};
     let attempted = 0;
     let invalidFiltered = 0;
 
     // 1) Generate 5 per pattern using ONLY semantic options
-    for (const pat of selectedPatterns) {
-      const optionsPerGroup = pat.groups.map((g) => cap(byDigitSemantic[g], 40));
-      if (optionsPerGroup.some((opts) => opts.length === 0)) {
+  for (const pat of feasiblePatterns) {
+      const slots = pat.slots ?? [];
+      const groupOptions = pat.groups.map((digit, idx) => {
+        const sem = byDigitSemantic[digit] ?? [];
+        const all = byDigitAll[digit] ?? [];
+        const base = sem.length > 0 ? sem : all; // prefer semantic, fallback to full pool for this digit
+        let filtered = this.filterCandidatesForSlot(base, slots[idx]);
+        if (filtered.length === 0) filtered = base;
+        const surfaces = Array.from(new Set(filtered.map((c) => c.surface))).slice(0, 60);
+        return { surfaces, slot: slots[idx], digit };
+      });
+      if (groupOptions.some((opts) => opts.surfaces.length === 0)) {
         invalidFiltered++;
         diagnostics.push(`Pattern ${pat.id}: missing semantic options for some digit groups`);
         continue;
       }
       const picks = await this.pickWithLLMAsync(
-        optionsPerGroup,
+        groupOptions.map((o) => o.surfaces),
         variantsPerPattern,
         req.sceneIntent,
         req.continuityContext,
+        slots,
       );
       for (const tokens of picks) {
         if (tokens.length !== pat.groups.length) {
@@ -188,6 +178,12 @@ export class GenerationService {
           continue;
         }
         attempted++;
+        const validation = this.validateTokensForPattern(tokens, pat, candidateByKey);
+        if (validation) {
+          invalidFiltered++;
+          diagnostics.push(`Pattern ${pat.id}: slot validation failed (${validation})`);
+          continue;
+        }
         const text = tokens.join("");
         const tone = toneValidate(text, pat.groups);
         const sceneAlignmentScore = Math.min(1, (req.sceneIntent.emotions.length * 0.08) + 0.6);
@@ -200,44 +196,33 @@ export class GenerationService {
           sceneAlignmentScore,
           continuityScore,
         });
+        perPatternCounts[pat.id] = (perPatternCounts[pat.id] ?? 0) + 1;
       }
     }
 
-    // 2) Refinement using frequency/global options per digit
-    if (sentences.length) {
-      try {
-        const refined = await this.refineWithLLMAsync(
-          sentences,
-          selectedPatterns,
-          byDigitRefine,
-          req.sceneIntent,
-        );
-        for (let i = 0; i < sentences.length; i++) {
-          const r = refined[i];
-          if (!r) continue;
-          const pat = selectedPatterns.find((p) => p.id === sentences[i].patternId);
-          if (!pat) continue;
-          // Length check: each token must match the expected group digit length
-          let lengthsOk = true;
-          for (let gi = 0; gi < pat.groups.length; gi++) {
-            const expected = pat.groups[gi]?.length ?? 0;
-            const tok = r[gi] ?? "";
-            if (tok.length !== expected) {
-              lengthsOk = false;
-              break;
-            }
-          }
-          if (!lengthsOk) continue;
-          const tone2 = toneValidate(r.join(""), pat.groups);
-          if ((tone2.score ?? 0) >= (sentences[i].toneComplianceScore ?? 0) - 0.05) {
-            sentences[i].text = r.join("");
-            sentences[i].usedSurfaces = [...r];
-            sentences[i].toneComplianceScore = tone2.score;
-          }
-        }
-      } catch (e) {
-        diagnostics.push(`Refinement failed: ${e instanceof Error ? e.message : String(e)}`);
+    // Optional refinement phase: ask LLM to reorder the full set of candidates to
+    // improve grammatical/semantic flow of the set. No text edits, order only.
+    try {
+      const before = sentences.map((s) => s.text);
+      const refined = await this.refineCandidatesOrderLLM(
+        sentences,
+        req.sceneIntent,
+        req.continuityContext,
+        feasiblePatterns,
+      );
+      if (refined && refined.length === sentences.length) {
+        sentences.length = 0;
+        sentences.push(...refined);
+        diagnostics.push("Applied LLM order refinement to sentence candidates");
+      } else {
+        diagnostics.push("Refinement skipped or failed; keeping original order");
       }
+      const after = sentences.map((s) => s.text);
+      if (before.some((t, i) => t !== after[i])) {
+        console.log(`[GenerationService] refinement reordered: before=${before.join(" | ")} => after=${after.join(" | ")}`);
+      }
+    } catch {
+      diagnostics.push("Refinement threw error; ignored");
     }
 
     // Reranking is handled in RankingService; we stop at sentence candidates here.
@@ -257,6 +242,7 @@ export class GenerationService {
       diagnostics: { usedModel: this.geminiSentenceModel, llmAvailable: true, notes: diagnostics },
     };
     try {
+      console.log(`[GenerationService] per-pattern counts: ${JSON.stringify(perPatternCounts)}`);
       console.log(`[GenerationService] ${result.sentences.map((s) => s.text).join(", ")}`);
     } catch { /* noop log */ }
     return result;
@@ -280,77 +266,68 @@ export class GenerationService {
       };
     }
 
-    const sentences: SentenceCandidate[] = [];
     const diagnostics: string[] = [];
     let attempted = 0;
     let invalidFiltered = 0;
+  const sentences: SentenceCandidate[] = [];
+  const perPatternCounts: Record<string, number> = {};
 
-    // Limit to 3 patterns for "segment x3"
     const selectedPatterns = req.patterns.slice(0, 3);
     const variantsPerPattern = Math.max(1, Math.min(5, req.config.variantsPerPattern || 5));
+    const { candidateByKey, byDigitSemantic, byDigitAll } = this.prepareCandidatePools(
+      selectedPatterns,
+      req.candidatePool,
+    );
 
-    // Build candidate maps by digit
-    const byDigitSemantic: Record<string, string[]> = {};
-    const byDigitRefine: Record<string, string[]> = {};
-    for (const c of req.candidatePool) {
-      if (!c.toneDigit) continue;
-      const prov = (c.provenance || "").toLowerCase();
-      // Enforce surface length equals digit group length
-      if ((c.surface?.length ?? 0) !== c.toneDigit.length) continue;
-      if (prov.startsWith("semantic")) {
-        (byDigitSemantic[c.toneDigit] ||= []).push(c.surface);
-      } else if (prov.startsWith("freq")) {
-        (byDigitRefine[c.toneDigit] ||= []).push(c.surface);
-      }
-    }
-    // Deduplicate per digit and cap list sizes to keep prompts compact
-    const dedupCap = (arr?: string[], cap = 24) => Array.from(new Set(arr || [])).slice(0, cap);
-    for (const k of Object.keys(byDigitSemantic)) {
-      byDigitSemantic[k] = dedupCap(byDigitSemantic[k], 30);
-    }
-    for (const k of Object.keys(byDigitRefine)) byDigitRefine[k] = dedupCap(byDigitRefine[k], 20);
+    const feasiblePatterns = this.ensureFeasiblePatterns(selectedPatterns, byDigitAll);
 
     const llmOk = this.ensureGenAI();
-    if (!llmOk) {
-      diagnostics.push("GEMINI_API_KEY not set; running deterministic fallback generation");
-    }
+    if (!llmOk) diagnostics.push("GEMINI_API_KEY not set; running deterministic fallback generation");
 
-    // 1) For each pattern (segment), produce 5 sentences using ONLY semantic candidates per digit
-    for (const pat of selectedPatterns) {
-      const needed = pat.groups.length;
-      const optionsPerGroup: string[][] = pat.groups.map((g) => dedupCap(byDigitSemantic[g], 30));
+  for (const pat of feasiblePatterns) {
+      const slots = pat.slots ?? [];
+      const groupOptions = pat.groups.map((digit, idx) => {
+        const sem = byDigitSemantic[digit] ?? [];
+        const all = byDigitAll[digit] ?? [];
+        const base = sem.length > 0 ? sem : all;
+        let filtered = this.filterCandidatesForSlot(base, slots[idx]);
+        if (filtered.length === 0) filtered = base;
+        const surfaces = Array.from(new Set(filtered.map((cand) => cand.surface))).slice(0, 60);
+        return { surfaces, slot: slots[idx], digit };
+      });
 
-      // If any group has zero options, mark invalid and continue
-      if (optionsPerGroup.some((opts) => opts.length === 0)) {
+      if (groupOptions.some((opts) => opts.surfaces.length === 0)) {
         invalidFiltered++;
         diagnostics.push(`Pattern ${pat.id}: missing semantic options for some digit groups`);
         continue;
       }
 
-      let pickedSentences: string[][] = [];
-      if (llmOk && this.genAI) {
-        try {
-          pickedSentences = this.pickWithLLM(
-            optionsPerGroup,
-            variantsPerPattern,
-            req.sceneIntent,
-            req.continuityContext,
-          );
-        } catch {
-          diagnostics.push(`LLM pick failed for pattern ${pat.id}; falling back to greedy`);
-          pickedSentences = this.pickGreedy(optionsPerGroup, variantsPerPattern);
-        }
-      } else {
-        pickedSentences = this.pickGreedy(optionsPerGroup, variantsPerPattern);
+      let pickedSentences: string[][];
+      try {
+        pickedSentences = this.pickWithLLM(
+          groupOptions.map((o) => o.surfaces),
+          variantsPerPattern,
+          req.sceneIntent,
+          req.continuityContext,
+          slots,
+        );
+      } catch {
+        diagnostics.push(`LLM pick failed for pattern ${pat.id}; falling back to greedy`);
+        pickedSentences = this.pickGreedy(groupOptions.map((o) => o.surfaces), variantsPerPattern);
       }
 
-      // Materialize candidates, score, and collect
       for (const chosenTokens of pickedSentences) {
-        if (chosenTokens.length !== needed) {
+        if (chosenTokens.length !== pat.groups.length) {
           invalidFiltered++;
           continue;
         }
         attempted++;
+        const validation = this.validateTokensForPattern(chosenTokens, pat, candidateByKey);
+        if (validation) {
+          invalidFiltered++;
+          diagnostics.push(`Pattern ${pat.id}: slot validation failed (${validation})`);
+          continue;
+        }
         const text = chosenTokens.join("");
         const toneResult = toneValidate(text, pat.groups);
         const sceneAlignmentScore = Math.min(1, (req.sceneIntent.emotions.length * 0.08) + 0.6);
@@ -363,49 +340,11 @@ export class GenerationService {
           sceneAlignmentScore,
           continuityScore,
         });
+        perPatternCounts[pat.id] = (perPatternCounts[pat.id] ?? 0) + 1;
       }
     }
 
-    // 2) Refinement pass using frequency/global candidates per digit (minimal edits)
-    if (sentences.length && (llmOk && this.genAI)) {
-      try {
-        const refined = this.refineWithLLM(
-          sentences,
-          selectedPatterns,
-          byDigitRefine,
-          req.sceneIntent,
-        );
-        // Replace texts where refinement came back valid
-        for (let i = 0; i < sentences.length; i++) {
-          const r = refined[i];
-          if (!r) continue;
-          // Validate tone and token lengths against its pattern
-          const pat = selectedPatterns.find((p) => p.id === sentences[i].patternId);
-          if (!pat) continue;
-          let lengthsOk = true;
-          for (let gi = 0; gi < pat.groups.length; gi++) {
-            const expected = pat.groups[gi]?.length ?? 0;
-            const tok = r[gi] ?? "";
-            if (tok.length !== expected) {
-              lengthsOk = false;
-              break;
-            }
-          }
-          if (!lengthsOk) continue;
-          const toneRes2 = toneValidate(r.join(""), pat.groups);
-          // Accept refinement if tone score is not worse than original by large margin
-          if ((toneRes2.score ?? 0) >= (sentences[i].toneComplianceScore ?? 0) - 0.05) {
-            sentences[i].text = r.join("");
-            sentences[i].usedSurfaces = [...r];
-            sentences[i].toneComplianceScore = toneRes2.score;
-          }
-        }
-      } catch {
-        diagnostics.push("Refinement LLM step failed; keeping original semantic picks");
-      }
-    }
-
-    // Reranking moved to RankingService
+    // Note: Refinement phase removed per requirements; sentences remain as initially generated.
 
     const generated = sentences.length;
     const avgSceneAlignment = generated
@@ -427,6 +366,7 @@ export class GenerationService {
       },
     };
     try {
+      console.log(`[GenerationService] per-pattern counts: ${JSON.stringify(perPatternCounts)}`);
       console.log(
         `[GenerationService] generate:done line=${req.lineIndex} attempted=${attempted} generated=${generated}`,
       );
@@ -457,9 +397,327 @@ export class GenerationService {
     count: number,
     _intent: SceneIntent,
     _continuity: ContinuityContext,
+    _slotHints: (PatternSlot | undefined)[] = [],
   ): string[][] {
     // For MVP, we keep this synchronous and fall back to a deterministic greedy picker.
     return this.pickGreedy(optionsPerGroup, count);
+  }
+
+  // --- Refinement: Reorder candidates with LLM (no text edits) ---
+  private async refineCandidatesOrderLLM(
+    candidates: SentenceCandidate[],
+    intent: SceneIntent,
+    continuity: ContinuityContext,
+    patterns: SegmentationPattern[],
+  ): Promise<SentenceCandidate[] | null> {
+    if (!this.ensureGenAI() || !this.genAI) return null;
+    if (!candidates.length) return candidates;
+    // Deduplicate identical texts first while preserving first occurrence
+    const seen = new Set<string>();
+    const unique: { idx: number; c: SentenceCandidate }[] = [];
+    candidates.forEach((c, i) => {
+      if (seen.has(c.text)) return; // drop dups before refinement
+      seen.add(c.text);
+      unique.push({ idx: i, c });
+    });
+    const texts = unique.map((u) => u.c.text);
+    // Ensure all sentences have same character length to make index constraints meaningful
+    const lens = texts.map((t) => Array.from(t).length);
+    const L = lens[0] ?? 0;
+    const sameLen = lens.every((n) => n === L);
+    if (!sameLen || L === 0) return unique.map((u) => u.c);
+    // Build per-index character sets across all sentences
+    const indexSets: string[][] = Array.from({ length: L }, (_, i) => {
+      const set = new Set<string>();
+      for (const t of texts) {
+        const chars = Array.from(t);
+        set.add(chars[i]);
+      }
+      return Array.from(set);
+    });
+    // If there's little variance across positions, refinement adds little value; skip
+    const degreesOfFreedom = indexSets.reduce((acc, s) => acc + Math.max(0, s.length - 1), 0);
+    if (degreesOfFreedom < 2) return unique.map((u) => u.c);
+    const sys = [
+      "你是粵語歌詞的潤飾助手。",
+      "任務：根據每個字位(index)提供的可用字集合，生成最多 N 條新句子(與輸入句子數相同)，",
+      "使其語義與語法更自然、順口、主題一致。每條句子需逐位從對應的候選集合中各選一字，",
+      "形成長度固定為 L 的句子(與輸入句子等長)。",
+      "同時參考原始候選句(originalSentences)。請以『最小改動』為原則：只有在確實能改善語法或語意時，才改變各字位的選擇；",
+      "若原句已足夠自然，則可原封不動輸出(保留與原句一致的結果)。",
+      "嚴格限制：",
+      "1) 僅能從提供的 indexSets[i] 中擇一字作為第 i 位，不得使用集合之外的字。",
+      "2) 不得加入或刪除任何字(不可加標點)，每條句子長度必須等於 L。",
+      "3) 請輸出 JSON 格式：{ sentences: string[] }；其中每個元素為一條句子(可與原句相同)。",
+      "4) 不得重複句子；如無法滿足則輸出較少條。",
+      intent ? `主題：${JSON.stringify(intent)}` : "",
+      continuity?.previousLines?.length ? `前文：${JSON.stringify(continuity.previousLines)}` : "",
+      "\n【範例】",
+      "給定：",
+      JSON.stringify({
+        indexSets: [
+          ["青","明","流"],
+          ["山","月","水"],
+          ["常","長","不"],
+          ["在","照","息"],
+        ],
+        L: 4,
+        N: 3
+      }),
+      "期望輸出(JSON)：",
+      JSON.stringify({ sentences: ["青月長息", "明水不在", "流水長在"] }),
+    ].join("\n");
+  const Nreq = Math.min(texts.length, 15);
+  const payload = { indexSets, L, N: Nreq, originalSentences: texts, preference: "minimal-change" };
+    const content = `${sys}\n${JSON.stringify(payload)}`;
+    try {
+      const res: any = await this.genAI.models.generateContent({
+        model: this.geminiSentenceModel,
+        contents: [{ role: "user", parts: [{ text: content }] }],
+        config: {
+          temperature: 0.1,
+          responseMimeType: "application/json",
+          responseJsonSchema: {
+            type: "object",
+            properties: { sentences: { type: "array", items: { type: "string" } } },
+            required: ["sentences"],
+          },
+          maxOutputTokens: 512,
+        },
+      });
+      // deno-lint-ignore no-explicit-any
+      const parts: any[] = (res as any)?.response?.candidates?.[0]?.content?.parts
+        ?? (res as any)?.candidates?.[0]?.content?.parts
+        ?? [];
+      const raw = parts.map((p: any) => p?.text ?? p?.inline_data?.data ?? "").filter(Boolean).join("\n");
+      // Try JSON first
+      let candidateLines: string[] | null = null;
+      try {
+        const jsonText = (() => { const m = raw.match(/\{[\s\S]*\}/); return m ? m[0] : raw; })();
+        const parsed = JSON.parse(jsonText);
+        if (Array.isArray(parsed?.sentences)) candidateLines = parsed.sentences.map((s: unknown) => String(s));
+      } catch { /* fall back to plaintext */ }
+      if (!candidateLines) {
+        // Fallback: parse plain-text lines, stripping numbering/fences/quotes
+        const cleaned = raw.replace(/```[\s\S]*?```/g, "\n");
+        candidateLines = cleaned.split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter((l) => l && !/^```/.test(l))
+          .map((l) => l.replace(/^[-*•]\s*/, ""))
+          .map((l) => l.replace(/^\d+\.|^\d+\)|^[（(]?\d+[）)]\s*/, ""))
+          .map((l) => l.replace(/^"|^'|"$|'$/g, ""));
+      }
+      // Validate against indexSets
+      const validTexts: string[] = [];
+      const seenTexts = new Set<string>();
+      outer: for (const t of candidateLines) {
+        const chars = Array.from(t);
+        if (chars.length !== L) continue;
+        for (let i = 0; i < L; i++) {
+          if (!indexSets[i].includes(chars[i])) continue outer;
+        }
+        if (seenTexts.has(t)) continue;
+        seenTexts.add(t);
+        validTexts.push(t);
+        if (validTexts.length >= Nreq) break;
+      }
+      // If none valid, skip refinement
+      if (!validTexts.length) return unique.map((u) => u.c);
+      // Map refined texts back onto candidates, preserving patternId assignment by position
+      const patMap = new Map(patterns.map((p) => [p.id, p.groups] as const));
+      const out: SentenceCandidate[] = [];
+      const total = candidates.length;
+      for (let i = 0; i < total; i++) {
+        const base = candidates[i];
+        const text = validTexts[i] ?? base.text; // backfill with original if fewer
+        const groups = patMap.get(base.patternId) ?? [];
+        // Recompute tone compliance on the new text using the base pattern grouping
+        const tone = groups.length ? toneValidate(text, groups) : { score: base.toneComplianceScore } as any;
+        // Split text by group lengths for usedSurfaces (best-effort)
+        const used: string[] = [];
+        if (groups.length) {
+          let pos = 0;
+          for (const g of groups) {
+            const len = g.length;
+            used.push(Array.from(text).slice(pos, pos + len).join(""));
+            pos += len;
+          }
+        } else {
+          used.push(...base.usedSurfaces);
+        }
+        out.push({
+          patternId: base.patternId,
+          text,
+          usedSurfaces: used,
+          toneComplianceScore: tone.score ?? base.toneComplianceScore,
+          sceneAlignmentScore: base.sceneAlignmentScore,
+          continuityScore: base.continuityScore,
+        });
+      }
+      return out;
+    } catch {
+      return unique.map((u) => u.c);
+    }
+  }
+
+  private prepareCandidatePools(
+    patterns: SegmentationPattern[],
+    pool: LexicalCandidate[],
+  ): {
+    candidateByKey: Map<string, LexicalCandidate>;
+    byDigitSemantic: Record<string, LexicalCandidate[]>;
+    byDigitAll: Record<string, LexicalCandidate[]>;
+  } {
+    const candidateByKey = new Map<string, LexicalCandidate>();
+    const byDigitSemantic: Record<string, LexicalCandidate[]> = {};
+    const byDigitAll: Record<string, LexicalCandidate[]> = {};
+    void patterns; // patterns may be used for future extensions; currently unused here
+
+    for (const cand of pool) {
+      const surface = cand.surface?.trim();
+      const digit = cand.toneDigit?.trim();
+      if (!surface || !digit) continue;
+      const provenance = (cand.provenance || "").toLowerCase();
+      const normalized: LexicalCandidate = { ...cand, surface, toneDigit: digit };
+      if (digit === "global") continue; // ignore global refine candidates per updated requirements
+      if (surface.length !== digit.length) continue;
+      const key = `${surface}|${digit}`;
+      candidateByKey.set(key, normalized);
+      // Track all by digit
+      (byDigitAll[digit] ||= []).push(normalized);
+      // Track semantic-only subset
+      if (provenance.startsWith("semantic")) (byDigitSemantic[digit] ||= []).push(normalized);
+    }
+
+    for (const digit of Object.keys(byDigitSemantic)) {
+      byDigitSemantic[digit] = this.dedupeCandidates(byDigitSemantic[digit], 40);
+    }
+
+    for (const digit of Object.keys(byDigitAll)) {
+      byDigitAll[digit] = this.dedupeCandidates(byDigitAll[digit], 80);
+    }
+
+    return { candidateByKey, byDigitSemantic, byDigitAll };
+  }
+
+  private isFeasiblePattern(
+    pat: SegmentationPattern,
+    byDigitAll: Record<string, LexicalCandidate[]>,
+  ): boolean {
+    return pat.groups.every((digit) => (byDigitAll[digit]?.length ?? 0) > 0);
+  }
+
+  private ensureFeasiblePatterns(
+    selected: SegmentationPattern[],
+    byDigitAll: Record<string, LexicalCandidate[]>,
+  ): SegmentationPattern[] {
+    const out: SegmentationPattern[] = [];
+    const seen = new Set<string>();
+    const keyOf = (p: SegmentationPattern) => p.groups.join(" ");
+    // Add feasible from provided
+    for (const p of selected) {
+      const key = keyOf(p);
+      if (!seen.has(key) && this.isFeasiblePattern(p, byDigitAll)) {
+        seen.add(key);
+        out.push(p);
+      }
+    }
+    if (out.length >= 3) return out.slice(0, 3);
+
+    // Reconstruct tone sequence from the first provided pattern
+    const base = selected[0];
+    const toneSeq = base?.groups?.join("") ?? "";
+    if (!toneSeq) return selected.slice(0, 3);
+
+    // Generate additional candidate patterns with varied seeds
+    const MAX_TRIES = 40;
+    for (let k = 1; k <= MAX_TRIES && out.length < 3; k++) {
+      const more = generatePatterns(toneSeq, 1000 + k);
+      for (const cand of more) {
+        const key = keyOf(cand);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (this.isFeasiblePattern(cand, byDigitAll)) {
+          out.push(cand);
+          if (out.length >= 3) break;
+        }
+      }
+    }
+
+    // Try an all-singles fallback pattern if still short
+    if (out.length < 3) {
+      const singlesGroups = toneSeq.split("");
+      const singlesKey = singlesGroups.join(" ");
+      if (!seen.has(singlesKey)) {
+        // Use domain factory to satisfy SegmentationPattern shape
+        const singlesPat = {
+          id: `pat_fallback_all_single_${toneSeq}`,
+          groups: singlesGroups,
+          patternString: singlesKey,
+          slots: [],
+        } as SegmentationPattern;
+        seen.add(singlesKey);
+        if (this.isFeasiblePattern(singlesPat, byDigitAll)) {
+          out.push(singlesPat);
+        }
+      }
+    }
+
+    // If still short, include any remaining originals to make 3 entries
+    for (const p of selected) {
+      if (out.length >= 3) break;
+      const key = keyOf(p);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(p);
+      }
+    }
+    while (out.length < 3) out.push(selected[0]);
+    return out.slice(0, 3);
+  }
+
+  private dedupeCandidates(list: LexicalCandidate[] = [], limit = 36): LexicalCandidate[] {
+    const map = new Map<string, LexicalCandidate>();
+    for (const cand of list) {
+      if (!cand.surface || !cand.toneDigit) continue;
+      const key = `${cand.surface}|${cand.toneDigit}`;
+      const prev = map.get(key);
+      const prevScore = prev ? (prev.sceneRelevanceScore ?? prev.freq ?? 0) : -Infinity;
+      const nextScore = cand.sceneRelevanceScore ?? cand.freq ?? 0;
+      if (!prev || nextScore > prevScore) map.set(key, cand);
+    }
+    return Array.from(map.values())
+      .sort((a, b) => (b.sceneRelevanceScore ?? b.freq ?? 0) - (a.sceneRelevanceScore ?? a.freq ?? 0))
+      .slice(0, limit);
+  }
+
+  private filterCandidatesForSlot(
+    candidates: LexicalCandidate[],
+    slot?: PatternSlot,
+  ): LexicalCandidate[] {
+    if (!slot) return candidates;
+    const slotMatched = candidates.filter((c) => c.slotMatches?.includes(slot.id));
+    if (slotMatched.length) return slotMatched;
+    const posMatched = candidates.filter((c) => c.posTag && c.posTag === slot.posTag);
+    if (posMatched.length) return posMatched;
+    return candidates;
+  }
+
+  private validateTokensForPattern(
+    tokens: string[],
+    pattern: SegmentationPattern,
+    candidateByKey: Map<string, LexicalCandidate>,
+  ): string | null {
+    if (tokens.length !== pattern.groups.length) return "token_length_mismatch";
+    for (let i = 0; i < pattern.groups.length; i++) {
+      const digit = pattern.groups[i];
+      const token = tokens[i];
+      const candidate = candidateByKey.get(`${token}|${digit}`);
+      if (!candidate) return `candidate_missing_${digit}`;
+      // Note: Slot and POS validation intentionally relaxed to avoid over-rejection when
+      // fallback pools are used. We already bias selection via slot filtering earlier.
+    }
+    return null;
   }
 
   private async pickWithLLMAsync(
@@ -467,9 +725,10 @@ export class GenerationService {
     count: number,
     _intent: SceneIntent,
     _continuity: ContinuityContext,
+    slotHints: (PatternSlot | undefined)[] = [],
   ): Promise<string[][]> {
     if (!this.genAI) return this.pickGreedy(optionsPerGroup, count);
-    const payload = { optionsPerGroup, count, intent: _intent, continuity: _continuity };
+    const payload = { optionsPerGroup, count, intent: _intent, continuity: _continuity, slots: slotHints };
     const sys = [
       "你是粵語歌詞的句子生成器。",
       "任務：從每一組提供的候選詞（按聲調數字分組），每組選擇恰好一個詞，串連成一句完整且自然的粵語句子。",
@@ -481,7 +740,7 @@ export class GenerationService {
     try {
       const res = await this.genAI.models.generateContent({
         model: this.geminiSentenceModel,
-        contents: content,
+        contents: [{ role: "user", parts: [{ text: content }] }],
         config: {
           temperature: 0.3,
           responseMimeType: "application/json",
@@ -492,15 +751,20 @@ export class GenerationService {
             },
             required: ["choices"],
           },
-          maxOutputTokens: 300,
+          maxOutputTokens: 400,
         },
       });
-      const parts: any[] = (res as any)?.candidates?.[0]?.content?.parts || [];
-      const raw = parts.map((p: any) => p.text || p.inline_data?.data).filter(Boolean).join("\n");
-      const s = raw.indexOf("{");
-      const e = raw.lastIndexOf("}");
-      const json = JSON.parse(raw.slice(s !== -1 ? s : 0, e !== -1 ? e + 1 : raw.length));
-      const choices: string[][] = Array.isArray(json?.choices) ? json.choices : [];
+      // deno-lint-ignore no-explicit-any
+      const parts: any[] = (res as any)?.response?.candidates?.[0]?.content?.parts
+        ?? (res as any)?.candidates?.[0]?.content?.parts
+        ?? [];
+      const raw = parts.map((p: any) => p?.text ?? p?.inline_data?.data ?? "").filter(Boolean).join("\n");
+      const jsonText = (() => {
+        const m = raw.match(/\{[\s\S]*\}/);
+        return m ? m[0] : raw;
+      })();
+      const parsed = JSON.parse(jsonText);
+      const choices: string[][] = Array.isArray(parsed?.choices) ? parsed.choices : [];
       const valid = choices
         .filter((arr) => Array.isArray(arr) && arr.length === optionsPerGroup.length)
         .map((arr) =>
@@ -515,70 +779,7 @@ export class GenerationService {
     }
   }
 
-  private refineWithLLM(
-    sentences: SentenceCandidate[],
-    patterns: SegmentationPattern[],
-    refineByDigit: Record<string, string[]>,
-    _intent: SceneIntent,
-  ): (string[] | null)[] {
-    if (!this.genAI) return sentences.map((_s) => null);
-    // Placeholder: keep original tokens (no-op) due to sync API
-    const items = sentences.map((s) => {
-      const pat = patterns.find((p) => p.id === s.patternId)!;
-      const groups = pat.groups;
-      const refineOptions = groups.map((g) =>
-        Array.from(new Set(refineByDigit[g] || [])).slice(0, 12)
-      );
-      return { text: s.text, tokens: s.usedSurfaces, groups, refineOptions };
-    });
-    void items; // avoid unused warnings
-    return sentences.map(() => null);
-  }
-
-  private async refineWithLLMAsync(
-    sentences: SentenceCandidate[],
-    patterns: SegmentationPattern[],
-    refineByDigit: Record<string, string[]>,
-    intent: SceneIntent,
-  ): Promise<(string[] | null)[]> {
-    if (!this.genAI) return sentences.map(() => null);
-    const items = sentences.map((s) => {
-      const pat = patterns.find((p) => p.id === s.patternId)!;
-      const groups = pat.groups;
-      const refineOptions = groups.map((g) =>
-        Array.from(new Set(refineByDigit[g] || [])).slice(0, 16)
-      );
-      return { text: s.text, tokens: s.usedSurfaces, groups, refineOptions };
-    });
-    const sys = [
-      "你是粵語歌詞潤飾助手。",
-      "任務：在保持每一組聲調分組位置對應的前提下，對句子做最少量替換，只能從對應分組提供的備選詞中挑選替換。",
-      "只在語義更貼近主題、或語法更自然時才替換；否則保持原詞。多數情況下不超過 1 處替換。",
-      "輸出：JSON [{ tokens: string[] }]，每條與輸入對應，長度需與分組一致。",
-    ].join("\n");
-    const payload = { intent, items };
-    const content = `${sys}\n${JSON.stringify(payload)}`;
-    try {
-      const res = await this.genAI.models.generateContent({
-        model: this.geminiSentenceModel,
-        contents: content,
-        config: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-          maxOutputTokens: 400,
-        },
-      });
-      const parts: any[] = (res as any)?.candidates?.[0]?.content?.parts || [];
-      const raw = parts.map((p: any) => p.text || p.inline_data?.data).filter(Boolean).join("\n");
-      const s = raw.indexOf("[");
-      const e = raw.lastIndexOf("]");
-      const arr = JSON.parse(raw.slice(s !== -1 ? s : 0, e !== -1 ? e + 1 : raw.length));
-      if (!Array.isArray(arr)) return sentences.map(() => null);
-      return arr.map((x) => Array.isArray(x?.tokens) ? x.tokens.map((t: any) => String(t)) : null);
-    } catch {
-      return sentences.map(() => null);
-    }
-  }
+  // Refinement helpers removed per updated requirements.
 
   // Reranking helpers removed; handled in RankingService now.
 }

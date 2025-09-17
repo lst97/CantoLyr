@@ -17,7 +17,7 @@ export function validateSegmentationPattern(pattern: SegmentationPattern): void 
   assert(pattern.id.length > 0, "SegmentationPattern id empty");
   assert(pattern.groups.length > 0, "SegmentationPattern groups empty");
   for (const g of pattern.groups) {
-    assert(/^[0-9]{1,4}$/.test(g), `Invalid tone group '${g}'`);
+    assert(/^[0-9]{1,2}$/.test(g), `Invalid tone group '${g}'`);
   }
   assert(pattern.patternString === pattern.groups.join(" "), "patternString mismatch");
 }

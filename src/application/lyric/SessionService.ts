@@ -6,6 +6,7 @@ import RetrievalService, { RetrievalConfig, SceneIntent } from "./RetrievalServi
 import GenerationService, { ContinuityContext, GenerationConfig } from "./GenerationService.ts";
 import RankingService, { ParagraphGroup, RankingConfig } from "./RankingService.ts";
 import { LyricErrorCode } from "../../shared/lyric-codes.ts";
+import { PatternSlot } from "../../domain/lyric/entities.ts";
 
 export interface LinePipelineConfig {
   retrieval: RetrievalConfig;
@@ -17,7 +18,7 @@ export interface LinePipelineResult {
   lineIndex: number;
   toneSequence: string;
   digitSet: string[];
-  patterns: Array<{ id: string; patternString: string; groups: string[] }>;
+  patterns: Array<{ id: string; patternString: string; groups: string[]; slots: PatternSlot[] }>;
   candidatePoolStats: {
     total: number;
     semanticCount: number;
@@ -27,6 +28,8 @@ export interface LinePipelineResult {
   topSentences: Array<{ text: string; patternId: string; finalRank: number; mmrScore: number }>;
   // For convenience in downstream UI, also expose the 3 paragraph candidates directly
   topParagraphCandidates: string[];
+  // Flattened all-line candidates (up to 15) for multi-line paragraph composition
+  allLineCandidates: Array<{ text: string; patternId: string }>;
   warnings: string[];
   error?: string;
 }
@@ -35,6 +38,8 @@ export interface SessionState {
   sessionId: string;
   seed: number;
   lines: LinePipelineResult[];
+  // Optional: Top-N complete lyric outputs (multi-line paragraphs)
+  topOutputs?: string[];
 }
 
 export class SessionService {
@@ -63,6 +68,7 @@ export class SessionService {
       lineIndex,
       toneSequence,
       digitSet: seg.digitSet,
+      patterns: seg.patterns,
       sceneIntent,
       config: config.retrieval,
       overrideTheme,
@@ -77,6 +83,7 @@ export class SessionService {
           id: p.id,
           patternString: p.patternString,
           groups: p.groups,
+          slots: ret.patternSlots?.[p.id] ?? p.slots ?? [],
         })),
         candidatePoolStats: {
           total: ret.total,
@@ -86,6 +93,7 @@ export class SessionService {
         },
         topSentences: [],
         topParagraphCandidates: [],
+        allLineCandidates: [],
         warnings: [...seg.warnings, ...ret.warnings],
         error: ret.error,
       };
@@ -97,10 +105,14 @@ export class SessionService {
         `[Session] runLine line=${lineIndex} using=${canUseAsync ? "async" : "sync"} generation`,
       );
     } catch { /* noop log */ }
+    const patternsWithSlots = seg.patterns.map((p) => ({
+      ...p,
+      slots: ret.patternSlots?.[p.id] ?? p.slots ?? [],
+    }));
     const gen = canUseAsync
       ? await (this.generation as any).generateAsync({
         lineIndex,
-        patterns: seg.patterns,
+        patterns: patternsWithSlots,
         candidatePool: ret.candidates,
         sceneIntent,
         continuityContext: { previousLines: previous } as ContinuityContext,
@@ -108,7 +120,7 @@ export class SessionService {
       })
       : this.generation.generate({
         lineIndex,
-        patterns: seg.patterns,
+        patterns: patternsWithSlots,
         candidatePool: ret.candidates,
         sceneIntent,
         continuityContext: { previousLines: previous } as ContinuityContext,
@@ -129,32 +141,39 @@ export class SessionService {
       const g = groupsMap.get(s.patternId)!;
       if ((g.list as any[]).length < 5) (g.list as any[]).push(s);
     }
-    const paraGroups: ParagraphGroup[] = Array.from(groupsMap.values()).map((g) => ({
+    const groupEntries = Array.from(groupsMap.values());
+    const paraGroups: ParagraphGroup[] = groupEntries.map((g) => ({
       patternId: g.patternId,
       candidates: g.list,
     }));
-    const paraRank = await this.ranking.selectTop3Paragraphs({
+    const paraRank = await this.ranking.selectTopParagraphs({
       lineIndex,
       groups: paraGroups,
       config: config.ranking,
       sceneIntent,
       previousLines: previous,
+      topParagraphCount: 3, // configurable if needed
     });
     // Debug: one-line summary (avoid verbose duplication)
     try {
       console.log(
-        `[Session] line=${lineIndex} paragraphs=${paraRank.metrics.totalParagraphs} top3=${paraRank.top3.length}`,
+        `[Session] line=${lineIndex} paragraphs=${paraRank.metrics.totalParagraphs}}`,
       );
     } catch { /* noop log */ }
     const paragraphCandidates = paraRank.top3.map((p) => p.paragraph);
+    const allLineCandidates = groupEntries
+      .flatMap((g) => g.list)
+      .slice(0, 15)
+      .map((s) => ({ text: s.text, patternId: s.patternId }));
     return {
       lineIndex,
       toneSequence,
       digitSet: seg.digitSet,
-      patterns: seg.patterns.map((p) => ({
+      patterns: patternsWithSlots.map((p) => ({
         id: p.id,
         patternString: p.patternString,
         groups: p.groups,
+        slots: p.slots ?? [],
       })),
       candidatePoolStats: {
         total: ret.total,
@@ -164,8 +183,42 @@ export class SessionService {
       },
       topSentences: [],
       topParagraphCandidates: paragraphCandidates,
+      allLineCandidates,
       warnings: [...seg.warnings, ...ret.warnings],
       error: paraRank.top3.length === 0 ? LyricErrorCode.ERROR_GENERATION_FAILED : undefined,
+    };
+  }
+
+  // Compose multi-line paragraphs: pass all per-line candidates to LLM to pick top N complete lyrics
+  async composeParagraphs(
+    lineResults: LinePipelineResult[],
+    sceneIntent: SceneIntent,
+    rankingConfig: RankingConfig,
+    topN = 3,
+  ): Promise<{ paragraphs: string[]; raw: { paragraph: string; lines: Array<{ text: string; patternId: string }> }[] }>
+  {
+    const groups: ParagraphGroup[] = lineResults.map((lr, idx) => ({
+      patternId: `line_${idx}`,
+      candidates: (lr.allLineCandidates || []).map((c) => ({
+        patternId: c.patternId,
+        text: c.text,
+        usedSurfaces: [],
+        toneComplianceScore: 1,
+        sceneAlignmentScore: 0.8,
+        continuityScore: 0.8,
+      })),
+    }));
+    const rank = await this.ranking.selectTopParagraphs({
+      lineIndex: 0,
+      groups,
+      config: rankingConfig,
+      sceneIntent,
+      previousLines: [],
+      topParagraphCount: topN,
+    });
+    return {
+      paragraphs: rank.top3.map((p) => p.paragraph),
+      raw: rank.top3,
     };
   }
 

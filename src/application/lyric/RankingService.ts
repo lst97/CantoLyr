@@ -63,6 +63,7 @@ export interface ParagraphRankingRequest {
   config: RankingConfig;
   sceneIntent?: { title: string; emotions: string[]; microIntent: string; continuityNotes: string };
   previousLines?: string[];
+  topParagraphCount?: number; // how many paragraphs to return (default 3)
 }
 
 export interface ParagraphRankingResult {
@@ -89,6 +90,71 @@ export class RankingService {
         this.genAI = null;
       }
     }
+  }
+
+  // --- Internal helpers for robust LLM IO ---
+  // Some SDK variants expose different shapes; consolidate to a single text blob.
+  // deno-lint-ignore no-explicit-any
+  private async extractLLMText(res: any): Promise<string> {
+    try {
+      // Newer SDKs often expose response.text()
+      // deno-lint-ignore no-explicit-any
+      const maybeTextFn: any = res?.response?.text ?? res?.text;
+      if (typeof maybeTextFn === "function") {
+        return await maybeTextFn.call(res.response ?? res);
+      }
+    } catch {
+      // ignore and fall back
+    }
+    try {
+      const parts: any[] = res?.response?.candidates?.[0]?.content?.parts
+        ?? res?.candidates?.[0]?.content?.parts
+        ?? [];
+      const raw = parts
+        .map((p: any) => p?.text ?? p?.inline_data?.data ?? "")
+        .filter(Boolean)
+        .join("\n");
+      if (raw) return raw;
+    } catch {
+      // ignore and fall back
+    }
+    return "";
+  }
+
+  private extractFirstJsonObject(text: string): string | null {
+    if (!text) return null;
+    // Try to find the first {...} block (handles extra prose or code fences)
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) return match[0];
+    return null;
+  }
+
+  // Parse scores array from a JSON (or text) response safely
+  private parseScoresFromText(text: string): number[] | null {
+    try {
+      const jsonStr = this.extractFirstJsonObject(text) ?? text;
+      const obj = JSON.parse(jsonStr);
+      if (Array.isArray(obj?.scores)) {
+        return obj.scores.map((x: unknown) => Number(x) || 0);
+      }
+    } catch {
+      // Fallback: try to extract a bracketed array of numbers
+      const bracket = text.match(/\[(?:[^\[\]]|\[[^\]]*\])*\]/);
+      if (bracket) {
+        try {
+          const arr = JSON.parse(bracket[0]);
+          if (Array.isArray(arr)) return arr.map((x: unknown) => Number(x) || 0);
+        } catch {
+          // ignore
+        }
+      }
+      // As a last resort, collect numbers present in the text
+      const nums = (text.match(/[-+]?(?:\d*\.)?\d+(?:[eE][-+]?\d+)?/g) || [])
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n));
+      if (nums.length) return nums;
+    }
+    return null;
   }
 
   async selectTop3(req: RankingRequest): Promise<RankingResult> {
@@ -121,17 +187,11 @@ export class RankingService {
         // deno-lint-ignore no-explicit-any
         const res: any = await this.genAI!.models.generateContent({
           model: this.geminiRerankModel,
-          contents: content,
-          config: { temperature: 0.0, responseMimeType: "application/json", maxOutputTokens: 200 },
+          contents: [{ role: "user", parts: [{ text: content }] }],
+          config: { temperature: 0.0, responseMimeType: "application/json", maxOutputTokens: 256 },
         });
-        const parts: any[] = res?.candidates?.[0]?.content?.parts || [];
-        const raw = parts.map((p: any) => p.text || p.inline_data?.data).filter(Boolean).join("\n");
-        const s = raw.indexOf("{");
-        const e = raw.lastIndexOf("}");
-        const json = JSON.parse(raw.slice(s !== -1 ? s : 0, e !== -1 ? e + 1 : raw.length));
-        llmScores = Array.isArray(json?.scores)
-          ? json.scores.map((x: unknown) => Number(x) || 0)
-          : null;
+        const raw = await this.extractLLMText(res);
+        llmScores = this.parseScoresFromText(raw);
       } catch (e) {
         console.warn(
           `[RankingService] LLM rerank failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -184,102 +244,72 @@ export class RankingService {
   }
 
   // Build all combinations picking one candidate from each group and score paragraphs
-  async selectTop3Paragraphs(req: ParagraphRankingRequest): Promise<ParagraphRankingResult> {
+  async selectTopParagraphs(req: ParagraphRankingRequest): Promise<ParagraphRankingResult> {
     const groups = req.groups.filter((g) => (g.candidates?.length ?? 0) > 0);
-    if (groups.length < 3) {
-      console.warn(`[RankingService] Paragraph ranking needs 3 groups; got ${groups.length}`);
+    const topN = req.topParagraphCount ?? 3;
+    if (groups.length < 1) {
+      console.warn(`[RankingService] Paragraph ranking needs at least 1 group; got ${groups.length}`);
       return { lineIndex: req.lineIndex, top3: [], metrics: { totalParagraphs: 0 } };
     }
-    // Limit per-group to reasonable size (default 5) to avoid explosion
+    // Cap per-group to reasonable size (default 5) to avoid explosion
     const capped = groups.map((g) => ({
       patternId: g.patternId,
       candidates: g.candidates.slice(0, 5),
     }));
 
-    // Generate combinations
-    type Para = { lines: Array<{ text: string; patternId: string }>; hScore: number };
-    const paras: Para[] = [];
-    const heuristic = (
-      c: SentenceCandidate,
-    ) => (c.sceneAlignmentScore * 0.6 + c.continuityScore * 0.4);
-    for (const a of capped[0].candidates) {
-      for (const b of capped[1].candidates) {
-        for (const c of capped[2].candidates) {
-          const lines = [a, b, c].map((x, i) => ({ text: x.text, patternId: capped[i].patternId }));
-          const hScore = (heuristic(a) + heuristic(b) + heuristic(c)) / 3;
-          paras.push({ lines, hScore });
-        }
+    // Compose LLM prompt: provide all candidate sentences for each line
+    const allLines = capped.map((g, i) => ({
+      patternId: g.patternId,
+      candidates: g.candidates.map((c) => c.text),
+      lineIndex: i,
+    }));
+    const sys = [
+      "你是粵語歌詞段落生成器。",
+      "用戶給定每行的候選句子，請根據語意、語法、主題契合、連貫性，從每行各選一句，組成最佳的段落。",
+      `請輸出前${topN}個最佳段落，每個段落為一組句子（每行一句），不得重複同一句。`,
+      "輸出 JSON 格式: { paragraphs: string[][] }，每個元素為一個段落，內含每行選中的句子，順序與輸入行一致。",
+      req.sceneIntent ? `主題: ${JSON.stringify(req.sceneIntent)}` : "",
+    ].filter(Boolean).join("\n");
+    const payload = { lines: allLines };
+    const content = `${sys}\n${JSON.stringify(payload)}`;
+    let paragraphs: string[][] = [];
+    let error: string | undefined;
+    try {
+      if (!this.genAI || !this.geminiApiKey) throw new Error("LLM not available");
+      const res: any = await this.genAI.models.generateContent({
+        model: this.geminiRerankModel,
+        contents: [{ role: "user", parts: [{ text: content }] }],
+        config: { temperature: 0.2, responseMimeType: "application/json", maxOutputTokens: 1024 },
+      });
+      const raw = await this.extractLLMText(res);
+      const json = (() => {
+        const m = raw.match(/\{[\s\S]*\}/);
+        return m ? m[0] : raw;
+      })();
+      const parsed = JSON.parse(json);
+      if (Array.isArray(parsed?.paragraphs)) {
+        paragraphs = parsed.paragraphs.filter((arr: unknown) => Array.isArray(arr) && arr.length === groups.length);
+      } else {
+        error = "LLM did not return paragraphs array";
       }
+    } catch (e) {
+      error = `LLM paragraph selection failed: ${e instanceof Error ? e.message : String(e)}`;
+      console.warn(`[RankingService] ${error}`);
     }
-    console.log(`[RankingService] Paragraph candidates: ${paras.length}`);
-
-    // Optional LLM scoring for paragraphs (may be large; cap to first N for cost). We blend or fall back to heuristic
-    const canUseLLM = !!this.genAI && !!this.geminiApiKey && !!req.sceneIntent;
-    const w = Math.min(1, Math.max(0, req.config.llmWeight ?? 0.7));
-    let finalScored: Array<{ idx: number; score: number }>; // index into paras
-    if (canUseLLM && paras.length > 0) {
-      try {
-        const MAX_RATE = 60; // cap to avoid too-large prompts; score first N by LLM
-        const sample = paras.slice(0, MAX_RATE);
-        const payload = {
-          intent: req.sceneIntent,
-          paragraphs: sample.map((p) => p.lines.map((l) => l.text).join("\n")),
-        };
-        const sys = [
-          "你是粵語歌詞評分器。",
-          "請對每段三行的歌詞段落，根據主題契合、語意連貫、語感自然三方面打 0..1 的綜合分。",
-          "輸出 JSON { scores: number[] }，順序與輸入一致。",
-        ].join("\n");
-        const content = `${sys}\n${JSON.stringify(payload)}`;
-        // deno-lint-ignore no-explicit-any
-        const res: any = await this.genAI!.models.generateContent({
-          model: this.geminiRerankModel,
-          contents: content,
-          config: { temperature: 0.0, responseMimeType: "application/json", maxOutputTokens: 200 },
-        });
-        const parts: any[] = res?.candidates?.[0]?.content?.parts || [];
-        const raw = parts.map((p: any) => p.text || p.inline_data?.data).filter(Boolean).join("\n");
-        const s = raw.indexOf("{");
-        const e = raw.lastIndexOf("}");
-        const json = JSON.parse(raw.slice(s !== -1 ? s : 0, e !== -1 ? e + 1 : raw.length));
-        const scores: number[] = Array.isArray(json?.scores)
-          ? json.scores.map((x: unknown) => Number(x) || 0)
-          : [];
-        console.log(
-          `[RankingService] LLM paragraph scores received: ${scores.length}/${sample.length}`,
-        );
-        finalScored = paras.map((p, idx) => {
-          const l = idx < scores.length ? Math.max(0, Math.min(1, scores[idx]!)) : null;
-          const score = l == null ? p.hScore : (w * l + (1 - w) * p.hScore);
-          return { idx, score };
-        });
-      } catch (e) {
-        console.warn(
-          `[RankingService] LLM paragraph scoring failed: ${
-            e instanceof Error ? e.message : String(e)
-          }`,
-        );
-        finalScored = paras.map((p, idx) => ({ idx, score: p.hScore }));
-      }
-    } else {
-      finalScored = paras.map((p, idx) => ({ idx, score: p.hScore }));
+    // Fallback: if LLM fails, return empty or best-effort
+    if (!paragraphs.length) {
+      // fallback: pick first candidate per line, repeat for topN
+      paragraphs = Array.from({ length: topN }, () => capped.map((g) => g.candidates[0]?.text ?? ""));
     }
-
-    finalScored.sort((a, b) => b.score - a.score);
-    const top3 = finalScored.slice(0, 3).map(({ idx, score }) => {
-      const lines = paras[idx].lines;
+    const topNParas = paragraphs.slice(0, topN).map((linesArr) => {
+      const lines = linesArr.map((text, i) => ({ text, patternId: capped[i].patternId }));
       return {
         paragraph: lines.map((l) => l.text).join("\n"),
         lines,
-        score,
+        score: 0, // LLM does not return score; could add if needed
       };
     });
-    console.log(
-      `[RankingService] Paragraph top3:\n${
-        top3.map((t, i) => `#${i + 1} (${t.score.toFixed(3)})\n${t.paragraph}`).join("\n---\n")
-      }\n`,
-    );
-    return { lineIndex: req.lineIndex, top3, metrics: { totalParagraphs: paras.length } };
+    return { lineIndex: req.lineIndex, top3: topNParas, metrics: { totalParagraphs: paragraphs.length } };
   }
 }
 
