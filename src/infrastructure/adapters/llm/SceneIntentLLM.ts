@@ -35,7 +35,8 @@ export class SceneIntentLLM {
   constructor(cfg: SceneIntentLLMConfig = {}) {
     this.apiKey = cfg.apiKey ?? Deno.env.get("GEMINI_API_KEY");
     this.model = cfg.model ?? "gemini-pro";
-    this.endpoint = cfg.endpoint ?? "https://generativelanguage.googleapis.com/v1beta/models";
+    this.endpoint = cfg.endpoint ??
+      "https://generativelanguage.googleapis.com/v1beta/models";
     this.temperature = cfg.temperature ?? 0.4;
     this.maxOutputTokens = cfg.maxOutputTokens ?? 256;
     this.enabled = cfg.enable ?? true;
@@ -55,7 +56,10 @@ export class SceneIntentLLM {
       contents: [
         { role: "user", parts: [{ text: systemPrompt + "\n" + userPrompt }] },
       ],
-      generationConfig: { temperature: this.temperature, maxOutputTokens: this.maxOutputTokens },
+      generationConfig: {
+        temperature: this.temperature,
+        maxOutputTokens: this.maxOutputTokens,
+      },
     };
     try {
       const res = await fetch(url, {
@@ -65,7 +69,8 @@ export class SceneIntentLLM {
       });
       if (!res.ok) throw new Error(`INTENT_LLM_HTTP_${res.status}`);
       const json = await res.json();
-      const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ??
+        "";
       const parsed = this.safeParse(text);
       return { ...parsed, rawModelText: text };
     } catch (err) {
@@ -91,7 +96,12 @@ export class SceneIntentLLM {
         };
       }
     } catch (_) { /* swallow */ }
-    return { title: "Untitled", emotions: [], microIntent: "", continuityNotes: "" };
+    return {
+      title: "Untitled",
+      emotions: [],
+      microIntent: "",
+      continuityNotes: "",
+    };
   }
 
   private heuristic(input: SceneIntentInput, note?: string): SceneIntentOutput {
@@ -108,10 +118,20 @@ export class SceneIntentLLM {
   }
 
   private extractEmotions(text: string): string[] {
-    const candidates = ["joy", "sorrow", "nostalgia", "hope", "anger", "longing", "calm"];
+    const candidates = [
+      "joy",
+      "sorrow",
+      "nostalgia",
+      "hope",
+      "anger",
+      "longing",
+      "calm",
+    ];
     const lower = text.toLowerCase();
     const found: string[] = [];
-    for (const c of candidates) if (lower.includes(c) && found.length < 4) found.push(c);
+    for (const c of candidates) {
+      if (lower.includes(c) && found.length < 4) found.push(c);
+    }
     if (!found.length) found.push("neutral");
     return found;
   }

@@ -75,7 +75,10 @@ export async function prefilterGroupsByTone(
       const topCount = Math.min(Math.floor(maxPerGroup * 0.7), sorted.length);
       const top = sorted.slice(0, topCount);
       const remaining = sorted.slice(topCount);
-      const randomCount = Math.max(0, Math.min(maxPerGroup - top.length, remaining.length));
+      const randomCount = Math.max(
+        0,
+        Math.min(maxPerGroup - top.length, remaining.length),
+      );
       const rand = uniformSample(remaining, randomCount, rng);
       selected = [...top, ...rand];
     } else {

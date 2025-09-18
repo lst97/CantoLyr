@@ -66,7 +66,10 @@ const FALLBACK_SLOT_THEMES = [
   "語氣",
 ];
 
-const POS_HINTS: Record<string, { label: string; template: (focus: string, detail: string) => string }> = {
+const POS_HINTS: Record<
+  string,
+  { label: string; template: (focus: string, detail: string) => string }
+> = {
   NOUN: {
     label: "名詞",
     template: (focus, detail) => `描述${focus}裡與${detail}相關的名詞`,
@@ -218,11 +221,13 @@ export class RetrievalService {
   private prisma: PrismaClient | null = null;
   private genAI: GoogleGenAI | null = null;
   constructor(private readonly minPerDigit = 3) {
-    this.collectionName = Deno.env.get("CHROMA_COLLECTION") ?? "cantolyr_lexicon_v1_1024";
+    this.collectionName = Deno.env.get("CHROMA_COLLECTION") ??
+      "cantolyr_lexicon_v1_1024";
     this.chromaUrl = Deno.env.get("CHROMA_URL") ?? "http://localhost:8000";
     this.embeddingModel = Deno.env.get("EMBEDDING_MODEL") ??
       "onnx-community/Qwen3-Embedding-0.6B-ONNX";
-    this.transformersCache = Deno.env.get("TRANSFORMERS_CACHE") ?? "./.cache/transformers";
+    this.transformersCache = Deno.env.get("TRANSFORMERS_CACHE") ??
+      "./.cache/transformers";
     this.geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? undefined;
     this.geminiSceneModel = Deno.env.get("GEMINI_SCENE_MODEL") ??
       "gemini-2.5-flash-lite";
@@ -237,13 +242,22 @@ export class RetrievalService {
     await this.ensureEmbedding();
 
     // 1) Derive/refine micro-scene intent via Gemini (lightweight)
-    const refinedIntent = await this.inferSceneIntent(req.sceneIntent, req.toneSequence);
+    const refinedIntent = await this.inferSceneIntent(
+      req.sceneIntent,
+      req.toneSequence,
+    );
 
     // 2) Build refined semantic query variants: base vs 子題 (sub-themes)
-    const { baseQueries, subThemeQueries } = this.buildBaseAndSubThemeQueries(refinedIntent, req);
+    const { baseQueries, subThemeQueries } = this.buildBaseAndSubThemeQueries(
+      refinedIntent,
+      req,
+    );
 
     // 3) Build POS-aware slot plan per pattern and digit
-    const slotPlan = await this.buildPatternSlotPlan(req.patterns ?? [], refinedIntent);
+    const slotPlan = await this.buildPatternSlotPlan(
+      req.patterns ?? [],
+      refinedIntent,
+    );
     const digitSlotMap = new Map<string, PatternSlot[]>();
     for (const slots of Object.values(slotPlan)) {
       for (const slot of slots) {
@@ -260,7 +274,10 @@ export class RetrievalService {
       50,
       Math.floor(confTarget < 5 ? 1000 * confTarget : confTarget),
     );
-    const perDigitBudget = Math.max(10, Math.floor(semanticTarget / req.digitSet.length));
+    const perDigitBudget = Math.max(
+      10,
+      Math.floor(semanticTarget / req.digitSet.length),
+    );
     const semantic: LexicalCandidate[] = [];
     const candidateByKey = new Map<string, LexicalCandidate>();
     const seenKey = new Set<string>(); // surface|digit
@@ -295,7 +312,10 @@ export class RetrievalService {
       const key = `${result.surface}|${digit}`;
       const existing = candidateByKey.get(key);
       if (existing) {
-        existing.sceneRelevanceScore = Math.max(existing.sceneRelevanceScore ?? 0, result.similarity);
+        existing.sceneRelevanceScore = Math.max(
+          existing.sceneRelevanceScore ?? 0,
+          result.similarity,
+        );
         if (result.freq != null) existing.freq = result.freq;
         if (result.posTag && !existing.posTag) existing.posTag = result.posTag;
         upsertSlotMatch(existing, result.slotId, result.prompt);
@@ -348,7 +368,9 @@ export class RetrievalService {
             { slot },
           );
           for (const r of slotResults) {
-            if (upsertSemanticCandidate(digit, r, "semantic-slot-relaxed")) slotAdded++;
+            if (upsertSemanticCandidate(digit, r, "semantic-slot-relaxed")) {
+              slotAdded++;
+            }
           }
         }
         count += slotAdded;
@@ -372,14 +394,24 @@ export class RetrievalService {
       if (count === 0) {
         const chunks = this.splitDigitForFallback(digit);
         if (chunks.length > 1) {
-          const perChunk = Math.max(5, Math.ceil(perDigitBudget / chunks.length));
+          const perChunk = Math.max(
+            5,
+            Math.ceil(perDigitBudget / chunks.length),
+          );
           const mergedChunkSurfaces = new Set<string>();
           for (const c of chunks) {
-            const chunkRes = await this.semanticSearchForDigit(baseQueries, c, perChunk, minSim);
+            const chunkRes = await this.semanticSearchForDigit(
+              baseQueries,
+              c,
+              perChunk,
+              minSim,
+            );
             for (const r of chunkRes) {
               if (mergedChunkSurfaces.has(r.surface)) continue;
               mergedChunkSurfaces.add(r.surface);
-              if (upsertSemanticCandidate(digit, r, "semantic-fallback")) count++;
+              if (upsertSemanticCandidate(digit, r, "semantic-fallback")) {
+                count++;
+              }
               if (count >= perDigitBudget) break;
             }
             if (count >= perDigitBudget) break;
@@ -387,7 +419,12 @@ export class RetrievalService {
         }
       }
 
-      perDigit[digit] = { semantic: count, freqTop: 0, freqRandom: 0, total: count };
+      perDigit[digit] = {
+        semantic: count,
+        freqTop: 0,
+        freqRandom: 0,
+        total: count,
+      };
     }
 
     // Phase 2: 子題 queries. If already at semanticTarget, cap additions to 20% per digit; otherwise, just fill up to target.
@@ -409,7 +446,8 @@ export class RetrievalService {
             if (upsertSemanticCandidate(digit, r, "semantic-subtheme")) added++;
             if (added >= perDigitSubCap) break;
           }
-          const stats = perDigit[digit] ?? { semantic: 0, freqTop: 0, freqRandom: 0, total: 0 };
+          const stats = perDigit[digit] ??
+            { semantic: 0, freqTop: 0, freqRandom: 0, total: 0 };
           stats.semantic += added;
           stats.total += added;
           perDigit[digit] = stats;
@@ -433,7 +471,8 @@ export class RetrievalService {
             if (upsertSemanticCandidate(digit, r, "semantic-subtheme")) added++;
             if (added >= budgetThisDigit) break;
           }
-          const stats = perDigit[digit] ?? { semantic: 0, freqTop: 0, freqRandom: 0, total: 0 };
+          const stats = perDigit[digit] ??
+            { semantic: 0, freqTop: 0, freqRandom: 0, total: 0 };
           stats.semantic += added;
           stats.total += added;
           perDigit[digit] = stats;
@@ -446,7 +485,10 @@ export class RetrievalService {
     const freqTopAll: LexicalCandidate[] = [];
     const freqRandomAll: LexicalCandidate[] = [];
     for (const digit of req.digitSet) {
-      const { top, randomSlice } = await this.getFrequencyEnrichmentForDigit(digit, req.config);
+      const { top, randomSlice } = await this.getFrequencyEnrichmentForDigit(
+        digit,
+        req.config,
+      );
       let addedTop = 0;
       let addedRand = 0;
       for (const item of top) {
@@ -475,7 +517,8 @@ export class RetrievalService {
         seenSurface.add(item.surface);
         addedRand++;
       }
-      const stats = perDigit[digit] ?? { semantic: 0, freqTop: 0, freqRandom: 0, total: 0 };
+      const stats = perDigit[digit] ??
+        { semantic: 0, freqTop: 0, freqRandom: 0, total: 0 };
       stats.freqTop += addedTop;
       stats.freqRandom += addedRand;
       stats.total = stats.semantic + stats.freqTop + stats.freqRandom;
@@ -529,13 +572,19 @@ export class RetrievalService {
     // 5) Warnings and errors
     const warnings: string[] = [];
     const minSemAbs = req.config.minSemanticThreshold < 1
-      ? Math.floor((req.config.semanticTarget || 200) * req.config.minSemanticThreshold)
+      ? Math.floor(
+        (req.config.semanticTarget || 200) * req.config.minSemanticThreshold,
+      )
       : Math.floor(req.config.minSemanticThreshold);
-    if (semanticCount < minSemAbs) warnings.push(LyricWarningCode.WARN_LOW_SEMANTIC);
+    if (semanticCount < minSemAbs) {
+      warnings.push(LyricWarningCode.WARN_LOW_SEMANTIC);
+    }
     // Frequency shortfall
     const wantTop = (req.config.freqTop || 100) * req.digitSet.length;
     const wantRand = (req.config.freqRandom || 50) * req.digitSet.length;
-    if (freqTopCount < Math.min(wantTop, total)) warnings.push(LyricWarningCode.WARN_LOW_FREQUENCY);
+    if (freqTopCount < Math.min(wantTop, total)) {
+      warnings.push(LyricWarningCode.WARN_LOW_FREQUENCY);
+    }
     if (freqRandomCount < Math.min(wantRand, total)) {
       warnings.push(LyricWarningCode.WARN_LOW_FREQUENCY);
     }
@@ -586,7 +635,10 @@ export class RetrievalService {
     const names = collections.map((c: any) => c.name as string);
     if (!names.includes(this.collectionName)) {
       // Try common fallbacks
-      const preferred = ["cantolyr_lexicon_v1_1024", "cantolyr_lexicon_v1_1024"];
+      const preferred = [
+        "cantolyr_lexicon_v1_1024",
+        "cantolyr_lexicon_v1_1024",
+      ];
       const foundPreferred = preferred.find((n) => names.includes(n));
       if (foundPreferred) {
         console.warn(
@@ -607,16 +659,24 @@ export class RetrievalService {
           : "No collections available on server.";
         const hint =
           `Set env 'CHROMA_COLLECTION' to one of the available names, or run 'deno run -A scripts/test-chroma.ts --limit=1' to list and verify.`;
-        throw new Error(`Chroma collection '${this.collectionName}' not found. ${list} ${hint}`);
+        throw new Error(
+          `Chroma collection '${this.collectionName}' not found. ${list} ${hint}`,
+        );
       }
     }
-    this.chromaCollection = await this.chromaClient.getCollection({ name: this.collectionName });
+    this.chromaCollection = await this.chromaClient.getCollection({
+      name: this.collectionName,
+    });
     try {
       // Some servers expose metadata via count or describe; attempt a light call to ensure it's reachable
       const cnt = await this.chromaCollection.count();
-      console.log(`Chroma collection '${this.collectionName}' reachable. Count=${cnt}`);
+      console.log(
+        `Chroma collection '${this.collectionName}' reachable. Count=${cnt}`,
+      );
     } catch (e) {
-      console.warn(`Warning: Could not verify collection count for '${this.collectionName}': ${e}`);
+      console.warn(
+        `Warning: Could not verify collection count for '${this.collectionName}': ${e}`,
+      );
     }
   }
 
@@ -631,7 +691,8 @@ export class RetrievalService {
       await Deno.mkdir(cacheDir, { recursive: true });
     } catch { /* ignore */ }
     // Use EMBEDDING_MODEL from env with default fallback
-    const modelId = this.embeddingModel || "onnx-community/Qwen3-Embedding-0.6B-ONNX";
+    const modelId = this.embeddingModel ||
+      "onnx-community/Qwen3-Embedding-0.6B-ONNX";
     this.embeddingFunction = await pipeline("feature-extraction", modelId, {
       cache_dir: cacheDir,
       dtype: "fp32",
@@ -663,12 +724,20 @@ export class RetrievalService {
   }
 
   private async embed(text: string): Promise<number[]> {
-    if (!this.embeddingFunction) throw new Error(LyricErrorCode.ERROR_EMBEDDING_FAILED);
-    const out = await this.embeddingFunction([text], { pooling: "last_token", normalize: true });
+    if (!this.embeddingFunction) {
+      throw new Error(LyricErrorCode.ERROR_EMBEDDING_FAILED);
+    }
+    const out = await this.embeddingFunction([text], {
+      pooling: "last_token",
+      normalize: true,
+    });
     return Array.from(out.data);
   }
 
-  private async inferSceneIntent(scene: SceneIntent, toneSequence: string): Promise<SceneIntent> {
+  private async inferSceneIntent(
+    scene: SceneIntent,
+    toneSequence: string,
+  ): Promise<SceneIntent> {
     // If API key missing, return as-is
     if (!this.geminiApiKey) return scene;
     if (!this.genAI) {
@@ -742,7 +811,8 @@ export class RetrievalService {
     _req: RetrievalRequest,
   ): { baseQueries: string[]; subThemeQueries: string[] } {
     // Prefer per-line override theme and sub-themes when present
-    const theme = _req.overrideTheme || intent.microIntent || intent.title || "";
+    const theme = _req.overrideTheme || intent.microIntent || intent.title ||
+      "";
     const subThemes = (_req.overrideSubThemes || []).filter(Boolean);
     const emotions = (intent.emotions || []).join(", ");
     const base = `語境 主題:${theme} 情感:${emotions}`;
@@ -788,7 +858,9 @@ export class RetrievalService {
       }
       return fallback;
     }
-    if (!this.genAI) this.genAI = new GoogleGenAI({ apiKey: this.geminiApiKey });
+    if (!this.genAI) {
+      this.genAI = new GoogleGenAI({ apiKey: this.geminiApiKey });
+    }
 
     const schema = {
       type: "array",
@@ -835,7 +907,9 @@ export class RetrievalService {
       if (!text) throw new Error("No text in response");
       const s = text.indexOf("[");
       const e = text.lastIndexOf("]");
-      const json = JSON.parse(text.slice(s !== -1 ? s : 0, e !== -1 ? e + 1 : text.length));
+      const json = JSON.parse(
+        text.slice(s !== -1 ? s : 0, e !== -1 ? e + 1 : text.length),
+      );
       // Normalize shape
       const plans: LineThemePlan[] = Array.isArray(json)
         ? json.map((it: any) => ({
@@ -847,7 +921,10 @@ export class RetrievalService {
         : [];
       // Pad or trim to count
       while (plans.length < count) {
-        plans.push({ primary: `${base.title}·${plans.length + 1}`, subThemes: [] });
+        plans.push({
+          primary: `${base.title}·${plans.length + 1}`,
+          subThemes: [],
+        });
       }
       return plans.slice(0, count);
     } catch {
@@ -882,8 +959,10 @@ export class RetrievalService {
       const baseSlots = pattern.slots ? Array.isArray(pattern.slots) ? pattern.slots : [] : [];
       if (baseSlots.length) {
         baseSlots.forEach((slot: PatternSlot, index: number) => {
-          const toneDigit = slot.toneDigit || pattern.groups[index] || pattern.groups[0] || "";
-          const fallbackPos = this.normalizePosTag(slot.posTag) ?? DEFAULT_POS_SEQUENCE[index % DEFAULT_POS_SEQUENCE.length];
+          const toneDigit = slot.toneDigit || pattern.groups[index] ||
+            pattern.groups[0] || "";
+          const fallbackPos = this.normalizePosTag(slot.posTag) ??
+            DEFAULT_POS_SEQUENCE[index % DEFAULT_POS_SEQUENCE.length];
           const normalizedPos = this.normalizePosTag(fallbackPos) ?? "NOUN";
           const hint = POS_HINTS[normalizedPos] ?? POS_HINTS.NOUN;
           const detail = FALLBACK_SLOT_THEMES[index % FALLBACK_SLOT_THEMES.length];
@@ -892,8 +971,8 @@ export class RetrievalService {
             toneDigit,
             posTag: normalizedPos,
             description: slot.description || `${detail}-${hint.label}`,
-            retrievalPrompt:
-              slot.retrievalPrompt || hint.template(focus, detail),
+            retrievalPrompt: slot.retrievalPrompt ||
+              hint.template(focus, detail),
           });
         });
         plan[pattern.id] = slots;
@@ -926,7 +1005,9 @@ export class RetrievalService {
     if (!patterns || patterns.length === 0) return {};
     const fallbackPlan = this.buildFallbackSlots(patterns, intent);
     if (!this.geminiApiKey) return fallbackPlan;
-    if (!this.genAI) this.genAI = new GoogleGenAI({ apiKey: this.geminiApiKey });
+    if (!this.genAI) {
+      this.genAI = new GoogleGenAI({ apiKey: this.geminiApiKey });
+    }
 
     const result: Record<string, PatternSlot[]> = {};
     for (const pattern of patterns) {
@@ -975,25 +1056,39 @@ export class RetrievalService {
         if (!text) throw new Error("Empty slot response");
         const jsonStart = text.indexOf("[");
         const jsonEnd = text.lastIndexOf("]");
-        const slice = text.slice(jsonStart !== -1 ? jsonStart : 0, jsonEnd !== -1 ? jsonEnd + 1 : text.length);
+        const slice = text.slice(
+          jsonStart !== -1 ? jsonStart : 0,
+          jsonEnd !== -1 ? jsonEnd + 1 : text.length,
+        );
         const parsed = JSON.parse(slice);
         if (!Array.isArray(parsed)) throw new Error("Invalid slot JSON");
         const slots: PatternSlot[] = [];
         for (let index = 0; index < pattern.groups.length; index++) {
           const toneDigit = pattern.groups[index];
           const raw = parsed[index] ?? {};
-          const normalizedPos = this.normalizePosTag(raw.posTag) ?? fallbackSlots[index]?.posTag ?? "NOUN";
+          const normalizedPos = this.normalizePosTag(raw.posTag) ??
+            fallbackSlots[index]?.posTag ?? "NOUN";
           const detail = FALLBACK_SLOT_THEMES[index % FALLBACK_SLOT_THEMES.length];
           const hint = POS_HINTS[normalizedPos] ?? POS_HINTS.NOUN;
-          const description = typeof raw.description === "string" && raw.description.trim().length > 0
+          const description = typeof raw.description === "string" &&
+              raw.description.trim().length > 0
             ? raw.description.trim()
-            : (fallbackSlots[index]?.description ?? `${detail}-${hint.label}`);
-          const retrievalPrompt = typeof raw.retrievalPrompt === "string" && raw.retrievalPrompt.trim().length > 0
+            : (fallbackSlots[index]?.description ??
+              `${detail}-${hint.label}`);
+          const retrievalPrompt = typeof raw.retrievalPrompt === "string" &&
+              raw.retrievalPrompt.trim().length > 0
             ? raw.retrievalPrompt.trim()
-            : (fallbackSlots[index]?.retrievalPrompt ?? hint.template(intent.microIntent || intent.title || "這個場景", detail));
+            : (fallbackSlots[index]?.retrievalPrompt ??
+              hint.template(
+                intent.microIntent || intent.title || "這個場景",
+                detail,
+              ));
           slots.push({
             id: `${pattern.id}_slot_${index}`,
-            toneDigit: String(raw.toneDigit || toneDigit || fallbackSlots[index]?.toneDigit || ""),
+            toneDigit: String(
+              raw.toneDigit || toneDigit || fallbackSlots[index]?.toneDigit ||
+                "",
+            ),
             posTag: normalizedPos,
             description,
             retrievalPrompt,
@@ -1002,7 +1097,9 @@ export class RetrievalService {
         result[pattern.id] = slots;
       } catch (err) {
         console.warn(
-          `Slot inference failed for pattern ${pattern.id}: ${err instanceof Error ? err.message : String(err)}`,
+          `Slot inference failed for pattern ${pattern.id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
         );
         result[pattern.id] = fallbackSlots;
       }
@@ -1017,15 +1114,19 @@ export class RetrievalService {
     budget: number,
     minSimilarity?: number,
     options?: { posTag?: string; slot?: PatternSlot },
-  ): Promise<Array<{
-    surface: string;
-    similarity: number;
-    freq?: number;
-    posTag?: string;
-    slotId?: string;
-    prompt?: string;
-  }>> {
-    if (!this.chromaClient) throw new Error(LyricErrorCode.ERROR_DATABASE_UNAVAILABLE);
+  ): Promise<
+    Array<{
+      surface: string;
+      similarity: number;
+      freq?: number;
+      posTag?: string;
+      slotId?: string;
+      prompt?: string;
+    }>
+  > {
+    if (!this.chromaClient) {
+      throw new Error(LyricErrorCode.ERROR_DATABASE_UNAVAILABLE);
+    }
     await this.ensureChromaCollection();
     const coll = this.chromaCollection!;
     // Align with scripts/test-chroma.ts: build where dynamically and pass only when non-empty
@@ -1039,8 +1140,14 @@ export class RetrievalService {
     let where: Record<string, unknown> | undefined;
     if (filters.length === 1) where = filters[0];
     else if (filters.length > 1) where = { "$and": filters };
-    const perQuery = Math.max(5, Math.ceil(budget / Math.max(1, queries.length)) * 2);
-    const merged: Record<string, { surface: string; similarity: number; freq?: number; pos?: string }> = {};
+    const perQuery = Math.max(
+      5,
+      Math.ceil(budget / Math.max(1, queries.length)) * 2,
+    );
+    const merged: Record<
+      string,
+      { surface: string; similarity: number; freq?: number; pos?: string }
+    > = {};
     let usedServerFilter = false;
     for (const q of queries) {
       const emb = await this.embed(q);
@@ -1048,9 +1155,7 @@ export class RetrievalService {
         queryEmbeddings: [emb],
         nResults: perQuery,
         include: ["documents", "metadatas", "distances"],
-        where: where
-          ? ((usedServerFilter = true), (where as any))
-          : undefined,
+        where: where ? ((usedServerFilter = true), (where as any)) : undefined,
       });
       const docs = res.documents?.[0] ?? [];
       const metas = res.metadatas?.[0] ?? [];
@@ -1058,7 +1163,9 @@ export class RetrievalService {
       for (let i = 0; i < docs.length; i++) {
         const md = metas[i] as any;
         // Defensive post-filter to ensure digit alignment by metadata
-        if (md && md.pronunciation && String(md.pronunciation) !== String(digit)) continue;
+        if (
+          md && md.pronunciation && String(md.pronunciation) !== String(digit)
+        ) continue;
         const surface = (md?.surface as string) ?? String(docs[i] ?? "");
         const sim = dists[i] != null ? 1 - Number(dists[i]) : 0;
         const prev = merged[surface];
@@ -1087,7 +1194,9 @@ export class RetrievalService {
         const dists = res.distances?.[0] ?? [];
         for (let i = 0; i < docs.length; i++) {
           const md = metas[i] as any;
-          if (md && md.pronunciation && String(md.pronunciation) !== String(digit)) continue;
+          if (
+            md && md.pronunciation && String(md.pronunciation) !== String(digit)
+          ) continue;
           const surface = (md?.surface as string) ?? String(docs[i] ?? "");
           const sim = dists[i] != null ? 1 - Number(dists[i]) : 0;
           const prev = merged[surface];
@@ -1119,7 +1228,9 @@ export class RetrievalService {
       const relaxed = Math.max(0.5, minSimilarity - 0.1);
       filtered = all.filter((x) => x.similarity >= relaxed);
     }
-    return (filtered.length ? filtered : all).slice(0, budget * 3).map((item) => ({
+    return (filtered.length ? filtered : all).slice(0, budget * 3).map((
+      item,
+    ) => ({
       surface: item.surface,
       similarity: item.similarity,
       freq: item.freq,
@@ -1138,7 +1249,9 @@ export class RetrievalService {
       randomSlice: Array<{ surface: string; freq: number }>;
     }
   > {
-    if (!this.prisma) throw new Error(LyricErrorCode.ERROR_DATABASE_UNAVAILABLE);
+    if (!this.prisma) {
+      throw new Error(LyricErrorCode.ERROR_DATABASE_UNAVAILABLE);
+    }
     // Fetch a window sorted by freq desc for the pronunciation digit
     const limitWindow = 200; // enough to cover top 100 and some buffer
     const readings = await this.prisma.reading.findMany({
@@ -1178,7 +1291,9 @@ export class RetrievalService {
     randWords25: Array<{ surface: string; freq: number }>;
     randChars25: Array<{ surface: string; freq: number }>;
   }> {
-    if (!this.prisma) throw new Error(LyricErrorCode.ERROR_DATABASE_UNAVAILABLE);
+    if (!this.prisma) {
+      throw new Error(LyricErrorCode.ERROR_DATABASE_UNAVAILABLE);
+    }
     // Fetch a wide window of readings globally, then deduplicate by surface (keep highest freq)
     const limitWindow = 4000;
     const readings = await this.prisma.reading.findMany({
@@ -1193,7 +1308,10 @@ export class RetrievalService {
       if (!surface) continue;
       if (!dedup.has(surface)) dedup.set(surface, freq);
     }
-    const all = Array.from(dedup.entries()).map(([surface, freq]) => ({ surface, freq }))
+    const all = Array.from(dedup.entries()).map(([surface, freq]) => ({
+      surface,
+      freq,
+    }))
       .sort((a, b) => b.freq - a.freq);
     const words = all.filter((x) => x.surface.length > 1);
     const chars = all.filter((x) => x.surface.length === 1);
@@ -1204,7 +1322,10 @@ export class RetrievalService {
     // Ranks 26..500 (1-based) => indexes 25..499
     const wordSlice = words.slice(25, Math.min(words.length, 500));
     const charSlice = chars.slice(25, Math.min(chars.length, 500));
-    const sample = (arr: Array<{ surface: string; freq: number }>, n: number) => {
+    const sample = (
+      arr: Array<{ surface: string; freq: number }>,
+      n: number,
+    ) => {
       const out: Array<{ surface: string; freq: number }> = [];
       const pool = arr.slice();
       const count = Math.min(n, pool.length);

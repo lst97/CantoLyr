@@ -90,7 +90,8 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
         }
         if (attempt === maxRetries) break;
         const base = 500; // ms
-        const backoff = base * Math.pow(2, attempt) + Math.floor(Math.random() * 200);
+        const backoff = base * Math.pow(2, attempt) +
+          Math.floor(Math.random() * 200);
         await new Promise((r) => setTimeout(r, backoff));
       }
     }

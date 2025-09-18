@@ -70,7 +70,10 @@ export class Entry {
   /**
    * Get all readings that match a tone pattern
    */
-  getReadingsForTonePattern(pattern: string, isPrefix: boolean = false): Reading[] {
+  getReadingsForTonePattern(
+    pattern: string,
+    isPrefix: boolean = false,
+  ): Reading[] {
     return this.readings.filter((reading) => reading.matchesTonePattern(pattern, isPrefix));
   }
 
@@ -139,7 +142,9 @@ export class Entry {
     // Validate and normalize type
     const normalizedType = params.type.toLowerCase();
     if (normalizedType !== "vocab" && normalizedType !== "char") {
-      throw new Error(`Invalid entry type: ${params.type}. Must be 'vocab' or 'char'`);
+      throw new Error(
+        `Invalid entry type: ${params.type}. Must be 'vocab' or 'char'`,
+      );
     }
 
     return new Entry({

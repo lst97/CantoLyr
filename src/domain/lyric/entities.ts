@@ -74,7 +74,10 @@ export interface GenerationSession {
 
 // ---------- Factory Helpers (lightweight) ----------
 
-export function createSegmentationPattern(groups: ToneGroup[], index: number): SegmentationPattern {
+export function createSegmentationPattern(
+  groups: ToneGroup[],
+  index: number,
+): SegmentationPattern {
   return {
     id: `pat_${index}_${groups.join("_")}`,
     groups: [...groups],
@@ -115,7 +118,10 @@ export function createGenerationSession(
 }
 
 export function cloneLineResult(line: LineResult): LineResult {
-  return { lineIndex: line.lineIndex, candidates: line.candidates.map((c) => ({ ...c })) };
+  return {
+    lineIndex: line.lineIndex,
+    candidates: line.candidates.map((c) => ({ ...c })),
+  };
 }
 
 export function sortSentencesByLineIndex(lines: LineResult[]): LineResult[] {

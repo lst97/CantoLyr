@@ -2,8 +2,8 @@
   "meta": {
     "feature": "lyrics-generation",
     "version": 1,
-    "createdAt": "2025-09-17T13:11:53.991Z",
-    "seed": 229481,
+    "createdAt": "2025-09-17T13:58:50.988Z",
+    "seed": 179722,
     "lineCount": 3
   },
   "lines": [
@@ -15,8 +15,6 @@
         "53",
         "39",
         "2",
-        "25",
-        "3",
         "5",
         "33",
         "9"
@@ -34,63 +32,63 @@
             {
               "id": "pat_0_22_53_39_slot_0",
               "toneDigit": "22",
-              "posTag": "NOUN",
-              "description": "指短暫的會面",
-              "retrievalPrompt": "短暫的相遇"
+              "posTag": "VERB",
+              "description": "行動或狀態動詞",
+              "retrievalPrompt": "形容竭盡全力去做嘅動作，例如「奮力」、「盡力」"
             },
             {
               "id": "pat_0_22_53_39_slot_1",
               "toneDigit": "22",
-              "posTag": "VERB",
-              "description": "表達想再見面的願望",
-              "retrievalPrompt": "期待再次相見"
+              "posTag": "NOUN",
+              "description": "具體或抽象事物",
+              "retrievalPrompt": "表示能力或者力量嘅名詞，例如「潛能」、「魄力」"
             },
             {
               "id": "pat_0_22_53_39_slot_2",
               "toneDigit": "53",
               "posTag": "ADV",
-              "description": "指時間上的預期",
-              "retrievalPrompt": "不久的將來"
+              "description": "程度或方式副詞",
+              "retrievalPrompt": "描述盡力嘅程度嘅副詞，例如「極度」、「完全」"
             }
           ]
         },
         {
-          "id": "pat_1_2_25_3_39",
-          "patternString": "2 25 3 39",
+          "id": "pat_1_2_2_53_39",
+          "patternString": "2 2 53 39",
           "groups": [
             "2",
-            "25",
-            "3",
+            "2",
+            "53",
             "39"
           ],
           "slots": [
             {
-              "id": "pat_1_2_25_3_39_slot_0",
+              "id": "pat_1_2_2_53_39_slot_0",
               "toneDigit": "2",
               "posTag": "VERB",
-              "description": "希望再見",
-              "retrievalPrompt": "表達希望再次見面的動詞"
+              "description": "行動或狀態",
+              "retrievalPrompt": "形容竭盡所能嘅動詞，例如『奮鬥』、『努力』"
             },
             {
-              "id": "pat_1_2_25_3_39_slot_1",
+              "id": "pat_1_2_2_53_39_slot_1",
               "toneDigit": "2",
-              "posTag": "NOUN",
-              "description": "短暫相遇",
-              "retrievalPrompt": "描述短暫相遇的名詞"
-            },
-            {
-              "id": "pat_1_2_25_3_39_slot_2",
-              "toneDigit": "5",
               "posTag": "ADV",
-              "description": "將來",
-              "retrievalPrompt": "表達未來時間的副詞"
+              "description": "修飾動詞程度",
+              "retrievalPrompt": "表示程度嘅副詞，例如『盡量』、『全力』"
             },
             {
-              "id": "pat_1_2_25_3_39_slot_3",
-              "toneDigit": "3",
-              "posTag": "PART",
-              "description": "期待",
-              "retrievalPrompt": "表達期待的語氣助詞"
+              "id": "pat_1_2_2_53_39_slot_2",
+              "toneDigit": "53",
+              "posTag": "NOUN",
+              "description": "抽象嘅力量",
+              "retrievalPrompt": "代表力量、能力嘅名詞，例如『潛能』、『能量』"
+            },
+            {
+              "id": "pat_1_2_2_53_39_slot_3",
+              "toneDigit": "39",
+              "posTag": "VERB",
+              "description": "提供協助行為",
+              "retrievalPrompt": "表示幫助、支援嘅動詞，例如『扶持』、『支援』"
             }
           ]
         },
@@ -107,105 +105,105 @@
             {
               "id": "pat_2_22_5_33_9_slot_0",
               "toneDigit": "22",
-              "posTag": "ADJ",
-              "description": "形容相遇時間很短",
-              "retrievalPrompt": "形容短暫的相遇"
+              "posTag": "VERB",
+              "description": "盡力去做",
+              "retrievalPrompt": "形容竭盡全力去做某件事嘅動詞"
             },
             {
               "id": "pat_2_22_5_33_9_slot_1",
               "toneDigit": "5",
-              "posTag": "VERB",
-              "description": "表達想再見面的願望",
-              "retrievalPrompt": "表達想再見面的心情"
+              "posTag": "PRON",
+              "description": "自己，自身",
+              "retrievalPrompt": "代表自己嘅粵語代詞，強調主動性"
             },
             {
               "id": "pat_2_22_5_33_9_slot_2",
               "toneDigit": "33",
-              "posTag": "ADV",
-              "description": "表示下次再見的承諾",
-              "retrievalPrompt": "表示下次再見"
+              "posTag": "NOUN",
+              "description": "能力，力量",
+              "retrievalPrompt": "指能力、力量嘅名詞，例如技能"
             },
             {
               "id": "pat_2_22_5_33_9_slot_3",
               "toneDigit": "9",
-              "posTag": "PART",
-              "description": "語氣詞，表達期待",
-              "retrievalPrompt": "語氣詞，表示期待"
+              "posTag": "AUX",
+              "description": "能夠，可以",
+              "retrievalPrompt": "表示可能性嘅助動詞，例如「能夠」"
             }
           ]
         }
       ],
       "candidatePoolStats": {
-        "total": 1739,
-        "semanticCount": 978,
-        "freqTopCount": 71,
-        "freqRandomCount": 690
+        "total": 1704,
+        "semanticCount": 1111,
+        "freqTopCount": 59,
+        "freqRandomCount": 534
       },
       "topSentences": [],
       "topParagraphCandidates": [
-        "陌路履新恰巧\n遇下午先不久\n狹義訝即將嗱",
-        "陌路履新恰巧\n遇下午先不久\n面熟戀初初嘅",
-        "陌路履新恰巧\n願密友先不久\n狹義訝即將嗱"
+        "盡力曙光捐款\n盡力眼光幫補\n盡力我功夫可",
+        "盡力武裝幫補\n盡力野心促使\n盡力你功績可",
+        "盡力眼光促使\n盡力武裝捐款\n盡力妳功夫可"
       ],
       "allLineCandidates": [
         {
-          "text": "序幕上妝不久",
+          "text": "盡力眼光促使",
           "patternId": "pat_0_22_53_39"
         },
         {
-          "text": "陌路履新恰巧",
+          "text": "盡力野心宗旨",
           "patternId": "pat_0_22_53_39"
         },
         {
-          "text": "豔遇滿足一起",
+          "text": "盡力武功促使",
           "patternId": "pat_0_22_53_39"
         },
         {
-          "text": "互動處於剛好",
+          "text": "盡力武裝幫補",
           "patternId": "pat_0_22_53_39"
         },
         {
-          "text": "近代暖身一早",
+          "text": "盡力曙光捐款",
           "patternId": "pat_0_22_53_39"
         },
         {
-          "text": "遇下午先不久",
-          "patternId": "pat_1_2_25_3_39"
+          "text": "盡力眼光幫補",
+          "patternId": "pat_1_2_2_53_39"
         },
         {
-          "text": "逅用語先初戀",
-          "patternId": "pat_1_2_25_3_39"
+          "text": "盡力野心促使",
+          "patternId": "pat_1_2_2_53_39"
         },
         {
-          "text": "遇上午相新手",
-          "patternId": "pat_1_2_25_3_39"
+          "text": "盡力武功幫補",
+          "patternId": "pat_1_2_2_53_39"
         },
         {
-          "text": "願密友先不久",
-          "patternId": "pat_1_2_25_3_39"
+          "text": "盡力武裝捐款",
+          "patternId": "pat_1_2_2_53_39"
         },
         {
-          "text": "望慧眼先光景",
-          "patternId": "pat_1_2_25_3_39"
+          "text": "盡力曙光褒獎",
+          "patternId": "pat_1_2_2_53_39"
         },
         {
-          "text": "狹義仰匆匆啦",
+          "text": "盡力我功夫可",
           "patternId": "pat_2_22_5_33_9"
         },
         {
-          "text": "合用邂開初也",
+          "text": "盡力我一級可",
           "patternId": "pat_2_22_5_33_9"
         },
         {
-          "text": "面熟戀初初嘅",
+          "text": "盡力妳功夫可",
           "patternId": "pat_2_22_5_33_9"
         },
         {
-          "text": "狹義訝即將嗱",
+          "text": "盡力佢職稱可",
           "patternId": "pat_2_22_5_33_9"
         },
         {
-          "text": "特定似一一啦",
+          "text": "盡力你功績可",
           "patternId": "pat_2_22_5_33_9"
         }
       ],
@@ -217,16 +215,48 @@
       "lineIndex": 1,
       "toneSequence": "4259",
       "digitSet": [
-        "42",
-        "59",
         "4",
-        "25",
-        "9",
-        "5"
+        "2",
+        "59",
+        "42",
+        "5",
+        "9"
       ],
       "patterns": [
         {
-          "id": "pat_0_42_59",
+          "id": "pat_0_4_2_59",
+          "patternString": "4 2 59",
+          "groups": [
+            "4",
+            "2",
+            "59"
+          ],
+          "slots": [
+            {
+              "id": "pat_0_4_2_59_slot_0",
+              "toneDigit": "4",
+              "posTag": "VERB",
+              "description": "行動或狀態",
+              "retrievalPrompt": "表達盡力去做嘅動詞，例如『竭盡』"
+            },
+            {
+              "id": "pat_0_4_2_59_slot_1",
+              "toneDigit": "2",
+              "posTag": "NOUN",
+              "description": "事物嘅名稱",
+              "retrievalPrompt": "代表力量、能力嘅名詞，例如『能量』"
+            },
+            {
+              "id": "pat_0_4_2_59_slot_2",
+              "toneDigit": "5",
+              "posTag": "VERB",
+              "description": "行動或狀態",
+              "retrievalPrompt": "舒緩痛苦嘅動作，例如『減輕』"
+            }
+          ]
+        },
+        {
+          "id": "pat_1_42_59",
           "patternString": "42 59",
           "groups": [
             "42",
@@ -234,50 +264,18 @@
           ],
           "slots": [
             {
-              "id": "pat_0_42_59_slot_0",
-              "toneDigit": "42",
-              "posTag": "NOUN",
-              "description": "描述這次短暫的相遇",
-              "retrievalPrompt": "短暫的相遇"
-            },
-            {
-              "id": "pat_0_42_59_slot_1",
-              "toneDigit": "42",
-              "posTag": "VERB",
-              "description": "表達希望下次再見",
-              "retrievalPrompt": "表達期待下次見面"
-            }
-          ]
-        },
-        {
-          "id": "pat_1_4_25_9",
-          "patternString": "4 25 9",
-          "groups": [
-            "4",
-            "25",
-            "9"
-          ],
-          "slots": [
-            {
-              "id": "pat_1_4_25_9_slot_0",
+              "id": "pat_1_42_59_slot_0",
               "toneDigit": "4",
               "posTag": "VERB",
-              "description": "希望再見",
-              "retrievalPrompt": "表達希望下次能再見面的動詞"
+              "description": "盡力嘅動作",
+              "retrievalPrompt": "形容竭盡全力去做嘅動作，例如『拼命』"
             },
             {
-              "id": "pat_1_4_25_9_slot_1",
+              "id": "pat_1_42_59_slot_1",
               "toneDigit": "2",
               "posTag": "NOUN",
-              "description": "短暫相遇",
-              "retrievalPrompt": "描述這次短暫相遇的名詞"
-            },
-            {
-              "id": "pat_1_4_25_9_slot_2",
-              "toneDigit": "5",
-              "posTag": "ADJ",
-              "description": "期待的",
-              "retrievalPrompt": "形容期待下次見面的形容詞"
+              "description": "力量嘅名詞",
+              "retrievalPrompt": "代表力量或者能力嘅詞語，例如『能量』"
             }
           ]
         },
@@ -292,99 +290,99 @@
           "slots": [
             {
               "id": "pat_2_42_5_9_slot_0",
-              "toneDigit": "42",
-              "posTag": "ADJ",
-              "description": "短暫相遇但情意綿綿",
-              "retrievalPrompt": "形容短暫相遇但情意綿綿"
+              "toneDigit": "4",
+              "posTag": "VERB",
+              "description": "盡力去做嘅動詞",
+              "retrievalPrompt": "形容竭盡所能嘅動作，例如『貢獻』"
             },
             {
               "id": "pat_2_42_5_9_slot_1",
-              "toneDigit": "5",
-              "posTag": "VERB",
-              "description": "表達下次再見的期盼",
-              "retrievalPrompt": "表達下次再見的期盼"
+              "toneDigit": "2",
+              "posTag": "NOUN",
+              "description": "力量嘅名詞",
+              "retrievalPrompt": "代表力量或者能力嘅詞語，例如『潛能』"
             },
             {
               "id": "pat_2_42_5_9_slot_2",
-              "toneDigit": "9",
-              "posTag": "ADV",
-              "description": "期待重逢的時光",
-              "retrievalPrompt": "表示期待重逢的時光"
+              "toneDigit": "5",
+              "posTag": "VERB",
+              "description": "減輕痛苦嘅動詞",
+              "retrievalPrompt": "紓緩痛苦嘅動作，例如『治療』"
             }
           ]
         }
       ],
       "candidatePoolStats": {
-        "total": 1580,
-        "semanticCount": 1092,
-        "freqTopCount": 46,
-        "freqRandomCount": 442
+        "total": 1316,
+        "semanticCount": 800,
+        "freqTopCount": 40,
+        "freqRandomCount": 476
       },
       "topSentences": [],
       "topParagraphCandidates": [
-        "際遇往返\n盼字眼悱\n絢麗邂久",
-        "際遇倍感\n惜字眼悱\n細密戀久",
-        "際遇有請\n靠用語忳\n瑰麗戀豈"
+        "竭力強忍\n發動腦海\n發力憤捍",
+        "竭力強忍\n鍛煉重點\n致力憤搶",
+        "作具強檢\n發達理想\n角力憤拼"
       ],
       "allLineCandidates": [
         {
-          "text": "際遇往返",
-          "patternId": "pat_0_42_59"
+          "text": "竭力強忍",
+          "patternId": "pat_0_4_2_59"
         },
         {
-          "text": "際遇倍感",
-          "patternId": "pat_0_42_59"
+          "text": "作具強檢",
+          "patternId": "pat_0_4_2_59"
         },
         {
-          "text": "際遇有請",
-          "patternId": "pat_0_42_59"
+          "text": "貢伎惹火",
+          "patternId": "pat_0_4_2_59"
         },
         {
-          "text": "際遇挽手",
-          "patternId": "pat_0_42_59"
+          "text": "拼電上彈",
+          "patternId": "pat_0_4_2_59"
         },
         {
-          "text": "際遇抱擁",
-          "patternId": "pat_0_42_59"
+          "text": "竭力武打",
+          "patternId": "pat_0_4_2_59"
         },
         {
-          "text": "盼字眼悱",
-          "patternId": "pat_1_4_25_9"
+          "text": "發動腦海",
+          "patternId": "pat_1_42_59"
         },
         {
-          "text": "惜字眼悱",
-          "patternId": "pat_1_4_25_9"
+          "text": "鍛煉重點",
+          "patternId": "pat_1_42_59"
         },
         {
-          "text": "靠用語忳",
-          "patternId": "pat_1_4_25_9"
+          "text": "制伏悍匪",
+          "patternId": "pat_1_42_59"
         },
         {
-          "text": "盼伴侶悱",
-          "patternId": "pat_1_4_25_9"
+          "text": "發達理想",
+          "patternId": "pat_1_42_59"
         },
         {
-          "text": "覬忌諱悱",
-          "patternId": "pat_1_4_25_9"
+          "text": "竭力憤懇",
+          "patternId": "pat_1_42_59"
         },
         {
-          "text": "絢麗邂久",
+          "text": "拼命憤拏",
           "patternId": "pat_2_42_5_9"
         },
         {
-          "text": "暗淡挽唯",
+          "text": "發力憤捍",
           "patternId": "pat_2_42_5_9"
         },
         {
-          "text": "瑰麗戀豈",
+          "text": "致力憤搶",
           "patternId": "pat_2_42_5_9"
         },
         {
-          "text": "細密戀久",
+          "text": "角力憤拼",
           "patternId": "pat_2_42_5_9"
         },
         {
-          "text": "細膩恃唯",
+          "text": "角力憤拼",
           "patternId": "pat_2_42_5_9"
         }
       ],
@@ -398,9 +396,8 @@
       "digitSet": [
         "3",
         "34",
-        "33",
         "43",
-        "4"
+        "33"
       ],
       "patterns": [
         {
@@ -416,35 +413,75 @@
             {
               "id": "pat_0_3_34_3_34_slot_0",
               "toneDigit": "3",
-              "posTag": "PRON",
-              "description": "指代對象",
-              "retrievalPrompt": "指代剛認識但有好感的人"
+              "posTag": "VERB",
+              "description": "行動、盡力",
+              "retrievalPrompt": "形容盡力去做嘅動作，例如「搏盡」"
             },
             {
               "id": "pat_0_3_34_3_34_slot_1",
-              "toneDigit": "34",
-              "posTag": "VERB",
-              "description": "短暫相遇",
-              "retrievalPrompt": "描述短暫的相遇"
+              "toneDigit": "3",
+              "posTag": "PRON",
+              "description": "代名詞、自己",
+              "retrievalPrompt": "代表自己嘅代詞，強調決心"
             },
             {
               "id": "pat_0_3_34_3_34_slot_2",
-              "toneDigit": "3",
-              "posTag": "ADV",
-              "description": "希望再見的時間",
-              "retrievalPrompt": "表達希望再次見面的時間"
+              "toneDigit": "34",
+              "posTag": "VERB",
+              "description": "行動、使用",
+              "retrievalPrompt": "描述使用力量嘅動作，例如「發揮」"
             },
             {
               "id": "pat_0_3_34_3_34_slot_3",
-              "toneDigit": "34",
-              "posTag": "VERB",
-              "description": "期待再見",
-              "retrievalPrompt": "表達期待再次見面的心情"
+              "toneDigit": "3",
+              "posTag": "NOUN",
+              "description": "名詞、能力",
+              "retrievalPrompt": "指可以運用嘅能力或者資源"
             }
           ]
         },
         {
-          "id": "pat_1_33_43_34",
+          "id": "pat_1_3_3_43_34",
+          "patternString": "3 3 43 34",
+          "groups": [
+            "3",
+            "3",
+            "43",
+            "34"
+          ],
+          "slots": [
+            {
+              "id": "pat_1_3_3_43_34_slot_0",
+              "toneDigit": "3",
+              "posTag": "VERB",
+              "description": "行動，盡力",
+              "retrievalPrompt": "形容竭盡全力去做嘅動作，例如『衝』、『撐』"
+            },
+            {
+              "id": "pat_1_3_3_43_34_slot_1",
+              "toneDigit": "3",
+              "posTag": "PRON",
+              "description": "代詞，指自己",
+              "retrievalPrompt": "代表自己嘅人稱代詞，例如『我』、『自己』"
+            },
+            {
+              "id": "pat_1_3_3_43_34_slot_2",
+              "toneDigit": "43",
+              "posTag": "NOUN",
+              "description": "名詞，所有資源",
+              "retrievalPrompt": "可以付出嘅所有嘢，例如『力量』、『精神』"
+            },
+            {
+              "id": "pat_1_3_3_43_34_slot_3",
+              "toneDigit": "3",
+              "posTag": "VERB",
+              "description": "動詞，使用",
+              "retrievalPrompt": "表示使用嘅動作，例如『用』、『花』"
+            }
+          ]
+        },
+        {
+          "id": "pat_2_33_43_34",
           "patternString": "33 43 34",
           "groups": [
             "33",
@@ -453,168 +490,111 @@
           ],
           "slots": [
             {
-              "id": "pat_1_33_43_34_slot_0",
+              "id": "pat_2_33_43_34_slot_0",
               "toneDigit": "33",
-              "posTag": "ADJ",
-              "description": "愉快地",
-              "retrievalPrompt": "形容這次偶遇令人愉快"
+              "posTag": "NOUN",
+              "description": "黑暗嘅本質",
+              "retrievalPrompt": "形容黑暗嘅名詞，例如深淵、黑夜"
             },
             {
-              "id": "pat_1_33_43_34_slot_1",
+              "id": "pat_2_33_43_34_slot_1",
               "toneDigit": "33",
               "posTag": "VERB",
-              "description": "期待再會",
-              "retrievalPrompt": "表達希望下次再見"
+              "description": "盡力嘅動作",
+              "retrievalPrompt": "表達盡力嘅動詞，例如竭力、努力"
             },
             {
-              "id": "pat_1_33_43_34_slot_2",
-              "toneDigit": "43",
-              "posTag": "ADV",
-              "description": "短暫地",
-              "retrievalPrompt": "表示這次相遇的時間很短"
-            }
-          ]
-        },
-        {
-          "id": "pat_2_3_3_4_3_3_4",
-          "patternString": "3 3 4 3 3 4",
-          "groups": [
-            "3",
-            "3",
-            "4",
-            "3",
-            "3",
-            "4"
-          ],
-          "slots": [
-            {
-              "id": "pat_2_3_3_4_3_3_4_slot_0",
-              "toneDigit": "3",
-              "posTag": "ADJ",
-              "description": "形容初次見面但感覺不錯",
-              "retrievalPrompt": "形容初次見面但感覺不錯"
-            },
-            {
-              "id": "pat_2_3_3_4_3_3_4_slot_1",
-              "toneDigit": "3",
-              "posTag": "VERB",
-              "description": "表達希望再次見面的動詞",
-              "retrievalPrompt": "表達希望再次見面的動詞"
-            },
-            {
-              "id": "pat_2_3_3_4_3_3_4_slot_2",
-              "toneDigit": "4",
-              "posTag": "NOUN",
-              "description": "指代這次短暫的相遇",
-              "retrievalPrompt": "指代這次短暫的相遇"
-            },
-            {
-              "id": "pat_2_3_3_4_3_3_4_slot_3",
-              "toneDigit": "3",
-              "posTag": "ADV",
-              "description": "表示未來某個時間點",
-              "retrievalPrompt": "表示未來某個時間點"
-            },
-            {
-              "id": "pat_2_3_3_4_3_3_4_slot_4",
-              "toneDigit": "3",
-              "posTag": "VERB",
-              "description": "表達期待再次見面的動詞",
-              "retrievalPrompt": "表達期待再次見面的動詞"
-            },
-            {
-              "id": "pat_2_3_3_4_3_3_4_slot_5",
-              "toneDigit": "4",
-              "posTag": "NOUN",
-              "description": "指代未來重逢的約定",
-              "retrievalPrompt": "指代未來重逢的約定"
+              "id": "pat_2_33_43_34_slot_2",
+              "toneDigit": "33",
+              "posTag": "PRON",
+              "description": "代表自己",
+              "retrievalPrompt": "代表「我」嘅代詞，例如自身、自己"
             }
           ]
         }
       ],
       "candidatePoolStats": {
-        "total": 1612,
-        "semanticCount": 1132,
-        "freqTopCount": 45,
-        "freqRandomCount": 435
+        "total": 1771,
+        "semanticCount": 1381,
+        "freqTopCount": 31,
+        "freqRandomCount": 359
       },
       "topSentences": [],
       "topParagraphCandidates": [
-        "今相見佳相約\n相關掛心牽掛\n初憶意今邀昨",
-        "今相見佳相約\n相關掛心牽掛\n初憶意今邀昨",
-        "今相見佳相約\n相關掛心牽掛\n初憶意今邀昨"
+        "掙激發拼心意\n掙當愛心觸發\n深宵再生激發",
+        "掙激發掙心意\n掙當決心操作\n晚黑發生開發",
+        "勞開發能心意\n掙當氣氛激發\n低谷革新促進"
       ],
       "allLineCandidates": [
         {
-          "text": "今相見佳相約",
+          "text": "掙激發掙心意",
           "patternId": "pat_0_3_34_3_34"
         },
         {
-          "text": "憶抒發思牽掛",
+          "text": "掙激發拼心意",
           "patternId": "pat_0_3_34_3_34"
         },
         {
-          "text": "初牽涉邀拉線",
+          "text": "勞開發能心意",
           "patternId": "pat_0_3_34_3_34"
         },
         {
-          "text": "挽希冀牽拜拜",
+          "text": "兼觸發悉新秀",
           "patternId": "pat_0_3_34_3_34"
         },
         {
-          "text": "今關切新相見",
+          "text": "敷操作執朝氣",
           "patternId": "pat_0_3_34_3_34"
         },
         {
-          "text": "相關掛心牽掛",
-          "patternId": "pat_1_33_43_34"
+          "text": "掙當氣氛激發",
+          "patternId": "pat_1_3_3_43_34"
         },
         {
-          "text": "開心記得抒發",
-          "patternId": "pat_1_33_43_34"
+          "text": "掙當意思開發",
+          "patternId": "pat_1_3_3_43_34"
         },
         {
-          "text": "歡欣三思牽涉",
-          "patternId": "pat_1_33_43_34"
+          "text": "掙當愛心觸發",
+          "patternId": "pat_1_3_3_43_34"
         },
         {
-          "text": "一般覺得拉線",
-          "patternId": "pat_1_33_43_34"
+          "text": "掙當決心操作",
+          "patternId": "pat_1_3_3_43_34"
         },
         {
-          "text": "相關構思希冀",
-          "patternId": "pat_1_33_43_34"
+          "text": "掙當轉機挑戰",
+          "patternId": "pat_1_3_3_43_34"
         },
         {
-          "text": "初憶意今邀昨",
-          "patternId": "pat_2_3_3_4_3_3_4"
+          "text": "深宵再生激發",
+          "patternId": "pat_2_33_43_34"
         },
         {
-          "text": "新思態需遭際",
-          "patternId": "pat_2_3_3_4_3_3_4"
+          "text": "晚黑發生開發",
+          "patternId": "pat_2_33_43_34"
         },
         {
-          "text": "慇偎志吩歡次",
-          "patternId": "pat_2_3_3_4_3_3_4"
+          "text": "黑色誕生推進",
+          "patternId": "pat_2_33_43_34"
         },
         {
-          "text": "啱瞻節時給故",
-          "patternId": "pat_2_3_3_4_3_3_4"
+          "text": "低谷革新促進",
+          "patternId": "pat_2_33_43_34"
         },
         {
-          "text": "粘繙讖該看餞",
-          "patternId": "pat_2_3_3_4_3_3_4"
+          "text": "陰天變心開創",
+          "patternId": "pat_2_33_43_34"
         }
       ],
       "warnings": [
-        "WARN_LOW_SEMANTIC",
         "WARN_LOW_FREQUENCY"
       ]
     }
   ],
   "topOutputs": [
-    "序幕上妝不久\n際遇往返\n今相見佳相約",
-    "序幕上妝不久\n際遇往返\n今相見佳相約",
-    "序幕上妝不久\n際遇往返\n今相見佳相約"
+    "盡力曙光捐款\n竭力強忍\n掙激發拼心意",
+    "盡力武裝幫補\n竭力強忍\n掙激發拼心意",
+    "盡力曙光捐款\n竭力武打\n掙激發拼心意"
   ]
 }

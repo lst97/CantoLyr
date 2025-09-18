@@ -23,21 +23,30 @@ function deriveToneGroups(sentence: string): string[] {
   return digits;
 }
 
-export function validate(sentence: string, pattern: string[]): ToneComplianceResult {
+export function validate(
+  sentence: string,
+  pattern: string[],
+): ToneComplianceResult {
   // Empty handling
   if (pattern.length === 0 || sentence.length === 0) {
     return {
       isCompliant: false,
       score: 0,
       mismatches: pattern.length === 0 && sentence.length === 0 ? [] : [
-        { position: 0, expected: pattern[0] ?? "", actual: deriveToneGroups(sentence)[0] ?? "" },
+        {
+          position: 0,
+          expected: pattern[0] ?? "",
+          actual: deriveToneGroups(sentence)[0] ?? "",
+        },
       ],
     };
   }
 
   const actualGroups = deriveToneGroups(sentence);
 
-  const mismatches: Array<{ position: number; expected: string; actual: string }> = [];
+  const mismatches: Array<
+    { position: number; expected: string; actual: string }
+  > = [];
   if (actualGroups.length !== pattern.length) {
     const maxLen = Math.max(actualGroups.length, pattern.length);
     for (let i = 0; i < maxLen; i++) {
@@ -55,7 +64,11 @@ export function validate(sentence: string, pattern: string[]): ToneComplianceRes
     if (pattern[i] === actualGroups[i]) {
       matches++;
     } else {
-      mismatches.push({ position: i, expected: pattern[i], actual: actualGroups[i] });
+      mismatches.push({
+        position: i,
+        expected: pattern[i],
+        actual: actualGroups[i],
+      });
     }
   }
 

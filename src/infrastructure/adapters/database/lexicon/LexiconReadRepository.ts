@@ -43,7 +43,10 @@ export class LexiconReadRepository implements ReadingRepo {
       : { equals: pronunciation };
     const entryTypeCondition = entryType ? { type: entryType } : {};
     return await this.prisma.reading.count({
-      where: { pronunciation: pronunciationCondition, entry: entryTypeCondition },
+      where: {
+        pronunciation: pronunciationCondition,
+        entry: entryTypeCondition,
+      },
     });
   }
 
@@ -54,14 +57,23 @@ export class LexiconReadRepository implements ReadingRepo {
     limit?: number;
     offset?: number;
   }): Promise<ReadingDTO[]> {
-    const { pronunciation, isPrefix = false, entryType, limit = 50, offset = 0 } = query;
+    const {
+      pronunciation,
+      isPrefix = false,
+      entryType,
+      limit = 50,
+      offset = 0,
+    } = query;
     const pronunciationCondition = isPrefix
       ? { startsWith: pronunciation }
       : { equals: pronunciation };
     const entryTypeCondition = entryType ? { type: entryType } : {};
 
     const readings = await this.prisma.reading.findMany({
-      where: { pronunciation: pronunciationCondition, entry: entryTypeCondition },
+      where: {
+        pronunciation: pronunciationCondition,
+        entry: entryTypeCondition,
+      },
       include: { entry: true },
       orderBy: [
         { entry: { type: "asc" } },

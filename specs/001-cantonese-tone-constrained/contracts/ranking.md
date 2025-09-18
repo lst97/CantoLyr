@@ -38,11 +38,33 @@ MMR diversity.
 {
   "lineIndex": 0,
   "top3": [
-    { "id": "c7", "finalRank": 1, "mmrScore": 0.912, "relevance": 0.88, "diversityPenalty": 0.05 },
-    { "id": "c3", "finalRank": 2, "mmrScore": 0.897, "relevance": 0.87, "diversityPenalty": 0.07 },
-    { "id": "c1", "finalRank": 3, "mmrScore": 0.881, "relevance": 0.86, "diversityPenalty": 0.09 }
+    {
+      "id": "c7",
+      "finalRank": 1,
+      "mmrScore": 0.912,
+      "relevance": 0.88,
+      "diversityPenalty": 0.05
+    },
+    {
+      "id": "c3",
+      "finalRank": 2,
+      "mmrScore": 0.897,
+      "relevance": 0.87,
+      "diversityPenalty": 0.07
+    },
+    {
+      "id": "c1",
+      "finalRank": 3,
+      "mmrScore": 0.881,
+      "relevance": 0.86,
+      "diversityPenalty": 0.09
+    }
   ],
-  "metrics": { "filteredForNonCompliance": 0, "initialCount": 15, "similarityMatrixSize": "15x15" }
+  "metrics": {
+    "filteredForNonCompliance": 0,
+    "initialCount": 15,
+    "similarityMatrixSize": "15x15"
+  }
 }
 ```
 

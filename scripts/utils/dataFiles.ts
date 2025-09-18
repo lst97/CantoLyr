@@ -93,12 +93,15 @@ export function loadCharFrequency(filePath: string): Map<string, number> {
   }
   const freqMap = new Map<string, number>();
   for (const it of items) {
-    const char = (it["character"] ?? it["char"] ?? it["surface"]) as string | undefined;
+    const char = (it["character"] ?? it["char"] ?? it["surface"]) as
+      | string
+      | undefined;
     if (!char || typeof char !== "string") continue;
     let freq: number | undefined = undefined;
     const keys = Object.keys(it);
     const perMillionKey = keys.find((k) =>
-      k.toLowerCase().includes("frequency") || k.toLowerCase().includes("ferquency")
+      k.toLowerCase().includes("frequency") ||
+      k.toLowerCase().includes("ferquency")
     );
     if (perMillionKey && typeof it[perMillionKey] === "number") {
       freq = it[perMillionKey] as number;
@@ -119,7 +122,10 @@ export function loadWordFreqPerMillion(filePath: string): Map<string, number> {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    if (trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*")) continue;
+    if (
+      trimmed.startsWith("//") || trimmed.startsWith("/*") ||
+      trimmed.startsWith("*")
+    ) continue;
     const clean = trimmed.replace(/[;,]$/, "");
     const match = clean.match(/^(.*?)\s+(\d+(?:\.\d+)?)(?:\s*)$/);
     if (match) {
@@ -135,9 +141,15 @@ export function loadWordFreqPerMillion(filePath: string): Map<string, number> {
       if (Array.isArray(parsed)) {
         for (const it of parsed as any[]) {
           if (!it) continue;
-          const w = (it.word ?? it.surface ?? it.w ?? it[0]) as string | undefined;
-          const c = (it.count ?? it.freq ?? it.c ?? it[1]) as number | undefined;
-          if (typeof w === "string" && typeof c === "number" && Number.isFinite(c)) {
+          const w = (it.word ?? it.surface ?? it.w ?? it[0]) as
+            | string
+            | undefined;
+          const c = (it.count ?? it.freq ?? it.c ?? it[1]) as
+            | number
+            | undefined;
+          if (
+            typeof w === "string" && typeof c === "number" && Number.isFinite(c)
+          ) {
             pairs.push({ w, c });
           }
         }
@@ -175,7 +187,9 @@ export function loadCoarseSentimentMap(filePath: string): Map<string, string> {
       const keyUpper = k.toUpperCase();
       if (Array.isArray(v)) {
         for (const term of v) {
-          if (typeof term === "string" && term.trim()) map.set(term.trim(), keyUpper);
+          if (typeof term === "string" && term.trim()) {
+            map.set(term.trim(), keyUpper);
+          }
         }
       }
     }
@@ -196,12 +210,18 @@ export function loadDetailedSentimentMaps(
     if (Array.isArray(arr)) {
       for (const it of arr) {
         if (!it) continue;
-        const w = (it["詞語"] ?? it["word"] ?? it["surface"]) as string | undefined;
+        const w = (it["詞語"] ?? it["word"] ?? it["surface"]) as
+          | string
+          | undefined;
         if (typeof w !== "string" || !w.trim()) continue;
         const reg = (it["情感分類"] ?? it["register"]) as string | undefined;
         const pos = (it["詞性種類"] ?? it["pos"]) as string | undefined;
-        if (typeof reg === "string" && reg.trim()) regMap.set(w.trim(), reg.trim().toUpperCase());
-        if (typeof pos === "string" && pos.trim()) posMap.set(w.trim(), pos.trim().toUpperCase());
+        if (typeof reg === "string" && reg.trim()) {
+          regMap.set(w.trim(), reg.trim().toUpperCase());
+        }
+        if (typeof pos === "string" && pos.trim()) {
+          posMap.set(w.trim(), pos.trim().toUpperCase());
+        }
       }
     }
   } catch {

@@ -277,7 +277,8 @@ export class ComposeLineUseCase {
     return {
       ...input,
       tonePattern: cleanPattern,
-      maxPerGroup: input.maxPerGroup ?? ComposeLineUseCase.DEFAULT_MAX_PER_GROUP,
+      maxPerGroup: input.maxPerGroup ??
+        ComposeLineUseCase.DEFAULT_MAX_PER_GROUP,
       language: input.language ?? "zh-HK",
     };
   }

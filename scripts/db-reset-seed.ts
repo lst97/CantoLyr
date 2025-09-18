@@ -72,34 +72,19 @@ async function main() {
 
     if (!psqlWorked) {
       logger.warn(
-        "⚠️  psql not available. Falling back to Prisma raw execution...",
+        "⚠️  psql not available. Falling back to Prisma db push (fresh schema)...",
       );
-      appliedVia = "prisma-raw";
-      const prisma = new PrismaClient({
-        datasources: { db: { url: databaseUrl } },
-      });
-      await prisma.$connect();
-      try {
-        const sql = await Deno.readTextFile(sqlPath);
-        const statements = sql
-          .split(/;\s*(?:\n|$)/)
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0 && !s.startsWith("--"));
-        for (const stmt of statements) {
-          // Skip DB-level statements in fallback (often lack perms)
-          if (/^(CREATE\s+DATABASE|GRANT\s+ALL\s+PRIVILEGES)/i.test(stmt)) {
-            continue;
-          }
-          try {
-            await prisma.$executeRawUnsafe(stmt);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            logger.warn(`   ↳ Skipped: ${msg}`);
-          }
-        }
-      } finally {
-        await prisma.$disconnect();
-      }
+      appliedVia = "prisma-push";
+
+      // Use Prisma db push for a clean schema setup
+      await run("deno", [
+        "run",
+        "-A",
+        "npm:prisma@latest",
+        "db",
+        "push",
+        "--force-reset",
+      ]);
     }
   }
 
@@ -109,17 +94,24 @@ async function main() {
   });
   await verifyClient.$connect();
   try {
-    const res: Array<{ exists: boolean }> = await verifyClient.$queryRawUnsafe(
-      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'entries') AS exists",
-    );
-    const ok = Array.isArray(res) && res[0] && (res[0] as any).exists === true;
-    if (!ok) {
-      logger.warn(
-        `⚠️  entries table not found after ${appliedVia}. Applying Prisma schema (db push)...`,
-      );
-      await run("deno", ["run", "-A", "npm:prisma@latest", "db", "push"]);
+    // Skip verification if we already used Prisma db push
+    if (appliedVia === "prisma-push") {
+      logger.info("✅ Schema verified (applied via Prisma db push).");
     } else {
-      logger.info("✅ Schema verified.");
+      const res: Array<{ exists: boolean }> = await verifyClient
+        .$queryRawUnsafe(
+          "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'entries') AS exists",
+        );
+      const ok = Array.isArray(res) && res[0] &&
+        (res[0] as any).exists === true;
+      if (!ok) {
+        logger.warn(
+          `⚠️  entries table not found after ${appliedVia}. Applying Prisma schema (db push)...`,
+        );
+        await run("deno", ["run", "-A", "npm:prisma@latest", "db", "push"]);
+      } else {
+        logger.info("✅ Schema verified.");
+      }
     }
   } finally {
     await verifyClient.$disconnect();
@@ -128,10 +120,10 @@ async function main() {
   logger.info("🧩 Regenerating Prisma client...");
   await run("deno", ["run", "-A", "npm:prisma@latest", "generate"]);
 
-  logger.info("🌱 Normalizing and seeding database...");
-  await run("deno", ["run", "-A", "scripts/normalize-seed-db.ts"]);
+  logger.info("🌱 Seeding database from preprocessed files...");
+  await run("deno", ["run", "-A", "scripts/populate-main-db.ts"]);
 
-  logger.info("✅ Done. Database reset, normalized, and seeded.");
+  logger.info("✅ Done. Database reset and seeded from preprocessed data.");
 }
 
 if (import.meta.main) {

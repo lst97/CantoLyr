@@ -13,7 +13,12 @@ emotional arc.
     {
       "lineIndex": 0,
       "top3": [
-        { "id": "l0s1", "text": "...", "continuityScore": 0.75, "sceneAlignmentScore": 0.86 },
+        {
+          "id": "l0s1",
+          "text": "...",
+          "continuityScore": 0.75,
+          "sceneAlignmentScore": 0.86
+        },
         { "id": "l0s2", "text": "..." }
       ]
     },

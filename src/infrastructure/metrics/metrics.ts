@@ -8,7 +8,14 @@ export interface CounterMetric {
 }
 export interface HistogramMetric {
   observe(v: number): void;
-  summary(): { count: number; min: number; max: number; p50: number; p95: number; avg: number };
+  summary(): {
+    count: number;
+    min: number;
+    max: number;
+    p50: number;
+    p95: number;
+    avg: number;
+  };
 }
 export interface TimerResult {
   ms: number;
@@ -30,7 +37,9 @@ class Histogram implements HistogramMetric {
     this.samples.push(v);
   }
   summary() {
-    if (!this.samples.length) return { count: 0, min: 0, max: 0, p50: 0, p95: 0, avg: 0 };
+    if (!this.samples.length) {
+      return { count: 0, min: 0, max: 0, p50: 0, p95: 0, avg: 0 };
+    }
     const sorted = [...this.samples].sort((a, b) => a - b);
     const count = sorted.length;
     const min = sorted[0];
@@ -38,7 +47,14 @@ class Histogram implements HistogramMetric {
     const p = (q: number) =>
       sorted[Math.min(sorted.length - 1, Math.floor(q * (sorted.length - 1)))];
     const sum = sorted.reduce((a, b) => a + b, 0);
-    return { count, min, max, p50: p(0.5), p95: p(0.95), avg: +(sum / count).toFixed(3) };
+    return {
+      count,
+      min,
+      max,
+      p50: p(0.5),
+      p95: p(0.95),
+      avg: +(sum / count).toFixed(3),
+    };
   }
 }
 

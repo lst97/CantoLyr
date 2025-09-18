@@ -18,14 +18,23 @@ export interface LinePipelineResult {
   lineIndex: number;
   toneSequence: string;
   digitSet: string[];
-  patterns: Array<{ id: string; patternString: string; groups: string[]; slots: PatternSlot[] }>;
+  patterns: Array<
+    {
+      id: string;
+      patternString: string;
+      groups: string[];
+      slots: PatternSlot[];
+    }
+  >;
   candidatePoolStats: {
     total: number;
     semanticCount: number;
     freqTopCount: number;
     freqRandomCount: number;
   };
-  topSentences: Array<{ text: string; patternId: string; finalRank: number; mmrScore: number }>;
+  topSentences: Array<
+    { text: string; patternId: string; finalRank: number; mmrScore: number }
+  >;
   // For convenience in downstream UI, also expose the 3 paragraph candidates directly
   topParagraphCandidates: string[];
   // Flattened all-line candidates (up to 15) for multi-line paragraph composition
@@ -99,7 +108,8 @@ export class SessionService {
       };
     }
     // Prefer async LLM-enabled path when available
-    const canUseAsync = (this as any).generation?.["generateAsync"] instanceof Function;
+    const canUseAsync = (this as any).generation?.["generateAsync"] instanceof
+      Function;
     try {
       console.log(
         `[Session] runLine line=${lineIndex} using=${canUseAsync ? "async" : "sync"} generation`,
@@ -128,11 +138,18 @@ export class SessionService {
       });
     // Group candidates into 3 groups (first three patterns), each up to 5 sentences
     const firstThree = seg.patterns.slice(0, 3);
-    const groupsMap = new Map<string, { patternId: string; list: typeof gen.sentences }>();
-    for (const p of firstThree) groupsMap.set(p.id, { patternId: p.id, list: [] as any });
+    const groupsMap = new Map<
+      string,
+      { patternId: string; list: typeof gen.sentences }
+    >();
+    for (const p of firstThree) {
+      groupsMap.set(p.id, { patternId: p.id, list: [] as any });
+    }
     // Only accept candidates whose text length equals the sum of digit lengths in the pattern (strict 10/7 etc.)
     const expectedLens = new Map<string, number>(
-      firstThree.map((p) => [p.id, p.groups.reduce((acc, g) => acc + g.length, 0)]),
+      firstThree.map((
+        p,
+      ) => [p.id, p.groups.reduce((acc, g) => acc + g.length, 0)]),
     );
     for (const s of gen.sentences) {
       if (!groupsMap.has(s.patternId)) continue;
@@ -195,8 +212,15 @@ export class SessionService {
     sceneIntent: SceneIntent,
     rankingConfig: RankingConfig,
     topN = 3,
-  ): Promise<{ paragraphs: string[]; raw: { paragraph: string; lines: Array<{ text: string; patternId: string }> }[] }>
-  {
+  ): Promise<
+    {
+      paragraphs: string[];
+      raw: {
+        paragraph: string;
+        lines: Array<{ text: string; patternId: string }>;
+      }[];
+    }
+  > {
     const groups: ParagraphGroup[] = lineResults.map((lr, idx) => ({
       patternId: `line_${idx}`,
       candidates: (lr.allLineCandidates || []).map((c) => ({

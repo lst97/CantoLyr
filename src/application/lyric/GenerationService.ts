@@ -133,23 +133,30 @@ export class GenerationService {
     }
 
     const selectedPatterns = req.patterns.slice(0, 3);
-    const variantsPerPattern = Math.max(1, Math.min(5, req.config.variantsPerPattern || 5));
-
-    const { candidateByKey, byDigitSemantic, byDigitAll } = this.prepareCandidatePools(
-      selectedPatterns,
-      req.candidatePool,
+    const variantsPerPattern = Math.max(
+      1,
+      Math.min(5, req.config.variantsPerPattern || 5),
     );
 
-    // Ensure we have 3 feasible patterns (each digit group has candidates)
-    const feasiblePatterns = this.ensureFeasiblePatterns(selectedPatterns, byDigitAll);
+    const { candidateByKey, byDigitSemantic, byDigitAll } = this
+      .prepareCandidatePools(
+        selectedPatterns,
+        req.candidatePool,
+      );
 
-  const sentences: SentenceCandidate[] = [];
-  const perPatternCounts: Record<string, number> = {};
+    // Ensure we have 3 feasible patterns (each digit group has candidates)
+    const feasiblePatterns = this.ensureFeasiblePatterns(
+      selectedPatterns,
+      byDigitAll,
+    );
+
+    const sentences: SentenceCandidate[] = [];
+    const perPatternCounts: Record<string, number> = {};
     let attempted = 0;
     let invalidFiltered = 0;
 
     // 1) Generate 5 per pattern using ONLY semantic options
-  for (const pat of feasiblePatterns) {
+    for (const pat of feasiblePatterns) {
       const slots = pat.slots ?? [];
       const groupOptions = pat.groups.map((digit, idx) => {
         const sem = byDigitSemantic[digit] ?? [];
@@ -157,12 +164,15 @@ export class GenerationService {
         const base = sem.length > 0 ? sem : all; // prefer semantic, fallback to full pool for this digit
         let filtered = this.filterCandidatesForSlot(base, slots[idx]);
         if (filtered.length === 0) filtered = base;
-        const surfaces = Array.from(new Set(filtered.map((c) => c.surface))).slice(0, 60);
+        const surfaces = Array.from(new Set(filtered.map((c) => c.surface)))
+          .slice(0, 60);
         return { surfaces, slot: slots[idx], digit };
       });
       if (groupOptions.some((opts) => opts.surfaces.length === 0)) {
         invalidFiltered++;
-        diagnostics.push(`Pattern ${pat.id}: missing semantic options for some digit groups`);
+        diagnostics.push(
+          `Pattern ${pat.id}: missing semantic options for some digit groups`,
+        );
         continue;
       }
       const picks = await this.pickWithLLMAsync(
@@ -178,15 +188,24 @@ export class GenerationService {
           continue;
         }
         attempted++;
-        const validation = this.validateTokensForPattern(tokens, pat, candidateByKey);
+        const validation = this.validateTokensForPattern(
+          tokens,
+          pat,
+          candidateByKey,
+        );
         if (validation) {
           invalidFiltered++;
-          diagnostics.push(`Pattern ${pat.id}: slot validation failed (${validation})`);
+          diagnostics.push(
+            `Pattern ${pat.id}: slot validation failed (${validation})`,
+          );
           continue;
         }
         const text = tokens.join("");
         const tone = toneValidate(text, pat.groups);
-        const sceneAlignmentScore = Math.min(1, (req.sceneIntent.emotions.length * 0.08) + 0.6);
+        const sceneAlignmentScore = Math.min(
+          1,
+          (req.sceneIntent.emotions.length * 0.08) + 0.6,
+        );
         const continuityScore = req.continuityContext.previousLines.length ? 0.72 : 0.76;
         sentences.push({
           patternId: pat.id,
@@ -215,11 +234,17 @@ export class GenerationService {
         sentences.push(...refined);
         diagnostics.push("Applied LLM order refinement to sentence candidates");
       } else {
-        diagnostics.push("Refinement skipped or failed; keeping original order");
+        diagnostics.push(
+          "Refinement skipped or failed; keeping original order",
+        );
       }
       const after = sentences.map((s) => s.text);
       if (before.some((t, i) => t !== after[i])) {
-        console.log(`[GenerationService] refinement reordered: before=${before.join(" | ")} => after=${after.join(" | ")}`);
+        console.log(
+          `[GenerationService] refinement reordered: before=${before.join(" | ")} => after=${
+            after.join(" | ")
+          }`,
+        );
       }
     } catch {
       diagnostics.push("Refinement threw error; ignored");
@@ -239,11 +264,19 @@ export class GenerationService {
       invalidFiltered,
       metrics: { avgSceneAlignment },
       ...(generated === 0 ? { error: LyricWarningCode.WARN_GENERATION_RETRY } : {}),
-      diagnostics: { usedModel: this.geminiSentenceModel, llmAvailable: true, notes: diagnostics },
+      diagnostics: {
+        usedModel: this.geminiSentenceModel,
+        llmAvailable: true,
+        notes: diagnostics,
+      },
     };
     try {
-      console.log(`[GenerationService] per-pattern counts: ${JSON.stringify(perPatternCounts)}`);
-      console.log(`[GenerationService] ${result.sentences.map((s) => s.text).join(", ")}`);
+      console.log(
+        `[GenerationService] per-pattern counts: ${JSON.stringify(perPatternCounts)}`,
+      );
+      console.log(
+        `[GenerationService] ${result.sentences.map((s) => s.text).join(", ")}`,
+      );
     } catch { /* noop log */ }
     return result;
   }
@@ -269,22 +302,33 @@ export class GenerationService {
     const diagnostics: string[] = [];
     let attempted = 0;
     let invalidFiltered = 0;
-  const sentences: SentenceCandidate[] = [];
-  const perPatternCounts: Record<string, number> = {};
+    const sentences: SentenceCandidate[] = [];
+    const perPatternCounts: Record<string, number> = {};
 
     const selectedPatterns = req.patterns.slice(0, 3);
-    const variantsPerPattern = Math.max(1, Math.min(5, req.config.variantsPerPattern || 5));
-    const { candidateByKey, byDigitSemantic, byDigitAll } = this.prepareCandidatePools(
+    const variantsPerPattern = Math.max(
+      1,
+      Math.min(5, req.config.variantsPerPattern || 5),
+    );
+    const { candidateByKey, byDigitSemantic, byDigitAll } = this
+      .prepareCandidatePools(
+        selectedPatterns,
+        req.candidatePool,
+      );
+
+    const feasiblePatterns = this.ensureFeasiblePatterns(
       selectedPatterns,
-      req.candidatePool,
+      byDigitAll,
     );
 
-    const feasiblePatterns = this.ensureFeasiblePatterns(selectedPatterns, byDigitAll);
-
     const llmOk = this.ensureGenAI();
-    if (!llmOk) diagnostics.push("GEMINI_API_KEY not set; running deterministic fallback generation");
+    if (!llmOk) {
+      diagnostics.push(
+        "GEMINI_API_KEY not set; running deterministic fallback generation",
+      );
+    }
 
-  for (const pat of feasiblePatterns) {
+    for (const pat of feasiblePatterns) {
       const slots = pat.slots ?? [];
       const groupOptions = pat.groups.map((digit, idx) => {
         const sem = byDigitSemantic[digit] ?? [];
@@ -292,13 +336,17 @@ export class GenerationService {
         const base = sem.length > 0 ? sem : all;
         let filtered = this.filterCandidatesForSlot(base, slots[idx]);
         if (filtered.length === 0) filtered = base;
-        const surfaces = Array.from(new Set(filtered.map((cand) => cand.surface))).slice(0, 60);
+        const surfaces = Array.from(
+          new Set(filtered.map((cand) => cand.surface)),
+        ).slice(0, 60);
         return { surfaces, slot: slots[idx], digit };
       });
 
       if (groupOptions.some((opts) => opts.surfaces.length === 0)) {
         invalidFiltered++;
-        diagnostics.push(`Pattern ${pat.id}: missing semantic options for some digit groups`);
+        diagnostics.push(
+          `Pattern ${pat.id}: missing semantic options for some digit groups`,
+        );
         continue;
       }
 
@@ -312,8 +360,13 @@ export class GenerationService {
           slots,
         );
       } catch {
-        diagnostics.push(`LLM pick failed for pattern ${pat.id}; falling back to greedy`);
-        pickedSentences = this.pickGreedy(groupOptions.map((o) => o.surfaces), variantsPerPattern);
+        diagnostics.push(
+          `LLM pick failed for pattern ${pat.id}; falling back to greedy`,
+        );
+        pickedSentences = this.pickGreedy(
+          groupOptions.map((o) => o.surfaces),
+          variantsPerPattern,
+        );
       }
 
       for (const chosenTokens of pickedSentences) {
@@ -322,15 +375,24 @@ export class GenerationService {
           continue;
         }
         attempted++;
-        const validation = this.validateTokensForPattern(chosenTokens, pat, candidateByKey);
+        const validation = this.validateTokensForPattern(
+          chosenTokens,
+          pat,
+          candidateByKey,
+        );
         if (validation) {
           invalidFiltered++;
-          diagnostics.push(`Pattern ${pat.id}: slot validation failed (${validation})`);
+          diagnostics.push(
+            `Pattern ${pat.id}: slot validation failed (${validation})`,
+          );
           continue;
         }
         const text = chosenTokens.join("");
         const toneResult = toneValidate(text, pat.groups);
-        const sceneAlignmentScore = Math.min(1, (req.sceneIntent.emotions.length * 0.08) + 0.6);
+        const sceneAlignmentScore = Math.min(
+          1,
+          (req.sceneIntent.emotions.length * 0.08) + 0.6,
+        );
         const continuityScore = req.continuityContext.previousLines.length ? 0.72 : 0.76;
         sentences.push({
           patternId: pat.id,
@@ -366,7 +428,9 @@ export class GenerationService {
       },
     };
     try {
-      console.log(`[GenerationService] per-pattern counts: ${JSON.stringify(perPatternCounts)}`);
+      console.log(
+        `[GenerationService] per-pattern counts: ${JSON.stringify(perPatternCounts)}`,
+      );
       console.log(
         `[GenerationService] generate:done line=${req.lineIndex} attempted=${attempted} generated=${generated}`,
       );
@@ -436,7 +500,10 @@ export class GenerationService {
       return Array.from(set);
     });
     // If there's little variance across positions, refinement adds little value; skip
-    const degreesOfFreedom = indexSets.reduce((acc, s) => acc + Math.max(0, s.length - 1), 0);
+    const degreesOfFreedom = indexSets.reduce(
+      (acc, s) => acc + Math.max(0, s.length - 1),
+      0,
+    );
     if (degreesOfFreedom < 2) return unique.map((u) => u.c);
     const sys = [
       "你是粵語歌詞的潤飾助手。",
@@ -456,19 +523,25 @@ export class GenerationService {
       "給定：",
       JSON.stringify({
         indexSets: [
-          ["青","明","流"],
-          ["山","月","水"],
-          ["常","長","不"],
-          ["在","照","息"],
+          ["青", "明", "流"],
+          ["山", "月", "水"],
+          ["常", "長", "不"],
+          ["在", "照", "息"],
         ],
         L: 4,
-        N: 3
+        N: 3,
       }),
       "期望輸出(JSON)：",
       JSON.stringify({ sentences: ["青月長息", "明水不在", "流水長在"] }),
     ].join("\n");
-  const Nreq = Math.min(texts.length, 15);
-  const payload = { indexSets, L, N: Nreq, originalSentences: texts, preference: "minimal-change" };
+    const Nreq = Math.min(texts.length, 15);
+    const payload = {
+      indexSets,
+      L,
+      N: Nreq,
+      originalSentences: texts,
+      preference: "minimal-change",
+    };
     const content = `${sys}\n${JSON.stringify(payload)}`;
     try {
       const res: any = await this.genAI.models.generateContent({
@@ -479,23 +552,31 @@ export class GenerationService {
           responseMimeType: "application/json",
           responseJsonSchema: {
             type: "object",
-            properties: { sentences: { type: "array", items: { type: "string" } } },
+            properties: {
+              sentences: { type: "array", items: { type: "string" } },
+            },
             required: ["sentences"],
           },
           maxOutputTokens: 512,
         },
       });
       // deno-lint-ignore no-explicit-any
-      const parts: any[] = (res as any)?.response?.candidates?.[0]?.content?.parts
-        ?? (res as any)?.candidates?.[0]?.content?.parts
-        ?? [];
-      const raw = parts.map((p: any) => p?.text ?? p?.inline_data?.data ?? "").filter(Boolean).join("\n");
+      const parts: any[] = (res as any)?.response?.candidates?.[0]?.content?.parts ??
+        (res as any)?.candidates?.[0]?.content?.parts ??
+        [];
+      const raw = parts.map((p: any) => p?.text ?? p?.inline_data?.data ?? "")
+        .filter(Boolean).join("\n");
       // Try JSON first
       let candidateLines: string[] | null = null;
       try {
-        const jsonText = (() => { const m = raw.match(/\{[\s\S]*\}/); return m ? m[0] : raw; })();
+        const jsonText = (() => {
+          const m = raw.match(/\{[\s\S]*\}/);
+          return m ? m[0] : raw;
+        })();
         const parsed = JSON.parse(jsonText);
-        if (Array.isArray(parsed?.sentences)) candidateLines = parsed.sentences.map((s: unknown) => String(s));
+        if (Array.isArray(parsed?.sentences)) {
+          candidateLines = parsed.sentences.map((s: unknown) => String(s));
+        }
       } catch { /* fall back to plaintext */ }
       if (!candidateLines) {
         // Fallback: parse plain-text lines, stripping numbering/fences/quotes
@@ -532,7 +613,9 @@ export class GenerationService {
         const text = validTexts[i] ?? base.text; // backfill with original if fewer
         const groups = patMap.get(base.patternId) ?? [];
         // Recompute tone compliance on the new text using the base pattern grouping
-        const tone = groups.length ? toneValidate(text, groups) : { score: base.toneComplianceScore } as any;
+        const tone = groups.length
+          ? toneValidate(text, groups)
+          : { score: base.toneComplianceScore } as any;
         // Split text by group lengths for usedSurfaces (best-effort)
         const used: string[] = [];
         if (groups.length) {
@@ -578,7 +661,11 @@ export class GenerationService {
       const digit = cand.toneDigit?.trim();
       if (!surface || !digit) continue;
       const provenance = (cand.provenance || "").toLowerCase();
-      const normalized: LexicalCandidate = { ...cand, surface, toneDigit: digit };
+      const normalized: LexicalCandidate = {
+        ...cand,
+        surface,
+        toneDigit: digit,
+      };
       if (digit === "global") continue; // ignore global refine candidates per updated requirements
       if (surface.length !== digit.length) continue;
       const key = `${surface}|${digit}`;
@@ -586,11 +673,16 @@ export class GenerationService {
       // Track all by digit
       (byDigitAll[digit] ||= []).push(normalized);
       // Track semantic-only subset
-      if (provenance.startsWith("semantic")) (byDigitSemantic[digit] ||= []).push(normalized);
+      if (provenance.startsWith("semantic")) {
+        (byDigitSemantic[digit] ||= []).push(normalized);
+      }
     }
 
     for (const digit of Object.keys(byDigitSemantic)) {
-      byDigitSemantic[digit] = this.dedupeCandidates(byDigitSemantic[digit], 40);
+      byDigitSemantic[digit] = this.dedupeCandidates(
+        byDigitSemantic[digit],
+        40,
+      );
     }
 
     for (const digit of Object.keys(byDigitAll)) {
@@ -676,7 +768,10 @@ export class GenerationService {
     return out.slice(0, 3);
   }
 
-  private dedupeCandidates(list: LexicalCandidate[] = [], limit = 36): LexicalCandidate[] {
+  private dedupeCandidates(
+    list: LexicalCandidate[] = [],
+    limit = 36,
+  ): LexicalCandidate[] {
     const map = new Map<string, LexicalCandidate>();
     for (const cand of list) {
       if (!cand.surface || !cand.toneDigit) continue;
@@ -687,7 +782,10 @@ export class GenerationService {
       if (!prev || nextScore > prevScore) map.set(key, cand);
     }
     return Array.from(map.values())
-      .sort((a, b) => (b.sceneRelevanceScore ?? b.freq ?? 0) - (a.sceneRelevanceScore ?? a.freq ?? 0))
+      .sort((a, b) =>
+        (b.sceneRelevanceScore ?? b.freq ?? 0) -
+        (a.sceneRelevanceScore ?? a.freq ?? 0)
+      )
       .slice(0, limit);
   }
 
@@ -728,7 +826,13 @@ export class GenerationService {
     slotHints: (PatternSlot | undefined)[] = [],
   ): Promise<string[][]> {
     if (!this.genAI) return this.pickGreedy(optionsPerGroup, count);
-    const payload = { optionsPerGroup, count, intent: _intent, continuity: _continuity, slots: slotHints };
+    const payload = {
+      optionsPerGroup,
+      count,
+      intent: _intent,
+      continuity: _continuity,
+      slots: slotHints,
+    };
     const sys = [
       "你是粵語歌詞的句子生成器。",
       "任務：從每一組提供的候選詞（按聲調數字分組），每組選擇恰好一個詞，串連成一句完整且自然的粵語句子。",
@@ -747,7 +851,10 @@ export class GenerationService {
           responseJsonSchema: {
             type: "object",
             properties: {
-              choices: { type: "array", items: { type: "array", items: { type: "string" } } },
+              choices: {
+                type: "array",
+                items: { type: "array", items: { type: "string" } },
+              },
             },
             required: ["choices"],
           },
@@ -755,10 +862,11 @@ export class GenerationService {
         },
       });
       // deno-lint-ignore no-explicit-any
-      const parts: any[] = (res as any)?.response?.candidates?.[0]?.content?.parts
-        ?? (res as any)?.candidates?.[0]?.content?.parts
-        ?? [];
-      const raw = parts.map((p: any) => p?.text ?? p?.inline_data?.data ?? "").filter(Boolean).join("\n");
+      const parts: any[] = (res as any)?.response?.candidates?.[0]?.content?.parts ??
+        (res as any)?.candidates?.[0]?.content?.parts ??
+        [];
+      const raw = parts.map((p: any) => p?.text ?? p?.inline_data?.data ?? "")
+        .filter(Boolean).join("\n");
       const jsonText = (() => {
         const m = raw.match(/\{[\s\S]*\}/);
         return m ? m[0] : raw;

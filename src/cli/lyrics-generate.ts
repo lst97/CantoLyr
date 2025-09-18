@@ -9,19 +9,9 @@ import SegmentationService from "../application/lyric/SegmentationService.ts";
 import RetrievalService from "../application/lyric/RetrievalService.ts";
 import GenerationService from "../application/lyric/GenerationService.ts";
 import RankingService from "../application/lyric/RankingService.ts";
-import SessionService, {
-  LinePipelineConfig,
-  SessionState,
-} from "../application/lyric/SessionService.ts";
+import SessionService, { SessionState } from "../application/lyric/SessionService.ts";
+import { buildDefaultLinePipelineConfig } from "../application/lyric/default-config.ts";
 import { saveToFile } from "../infrastructure/serialization/session-io.ts";
-
-function buildDefaultConfig(): LinePipelineConfig {
-  return {
-    retrieval: { semanticTarget: 0.8, freqTop: 100, freqRandom: 50, minSemanticThreshold: 0.3 },
-    generation: { variantsPerPattern: 5, maxRetriesPerSentence: 2 },
-    ranking: { topKSize: 3, mmrLambda: 0.5, similarityThreshold: 0.7 },
-  };
-}
 
 interface Args {
   prompt: string;
@@ -42,7 +32,9 @@ function usage(): void {
   console.log("Optional:");
   console.log("  --seed <n>               Seed for reproducibility");
   console.log("  --out <file>             Write JSON session export to file");
-  console.log("  --top <n>                Compose and include top-N full lyric outputs");
+  console.log(
+    "  --top <n>                Compose and include top-N full lyric outputs",
+  );
   console.log("  --json                   Emit JSON export to stdout");
   console.log("  -h, --help               Show help");
 }
@@ -76,10 +68,17 @@ if (import.meta.main) {
     const retrieval = new RetrievalService();
     const generation = new GenerationService();
     const ranking = new RankingService();
-    const sessionService = new SessionService(segmentation, retrieval, generation, ranking);
+    const sessionService = new SessionService(
+      segmentation,
+      retrieval,
+      generation,
+      ranking,
+    );
 
-    const toneSequences = args.tones.split(",").map((s) => s.trim()).filter(Boolean);
-    const config = buildDefaultConfig();
+    const toneSequences = args.tones.split(",").map((s) => s.trim()).filter(
+      Boolean,
+    );
+    const config = buildDefaultLinePipelineConfig();
     const sceneIntent = {
       title: args.prompt,
       emotions: [],
@@ -94,7 +93,11 @@ if (import.meta.main) {
       toneSequences,
     );
 
-  const state: SessionState = { sessionId: crypto.randomUUID(), seed, lines: [] };
+    const state: SessionState = {
+      sessionId: crypto.randomUUID(),
+      seed,
+      lines: [],
+    };
     const previousLines: string[] = [];
     for (let i = 0; i < toneSequences.length; i++) {
       const toneSeq = toneSequences[i];
@@ -120,7 +123,9 @@ if (import.meta.main) {
         themePlan[i]?.subThemes,
       );
       state.lines.push(lineResult);
-      if (lineResult.topSentences[0]) previousLines.push(lineResult.topSentences[0].text);
+      if (lineResult.topSentences[0]) {
+        previousLines.push(lineResult.topSentences[0].text);
+      }
     }
 
     // Optionally compose top-N complete lyric outputs using all lines' candidates
@@ -147,7 +152,9 @@ if (import.meta.main) {
         console.log(`Line ${line.lineIndex} (${line.toneSequence})`);
         if (line.error) console.log(`  ERROR: ${line.error}`);
         line.topSentences.forEach((ts) =>
-          console.log(`  ${ts.finalRank}. ${ts.text} (score=${ts.mmrScore.toFixed(3)})`)
+          console.log(
+            `  ${ts.finalRank}. ${ts.text} (score=${ts.mmrScore.toFixed(3)})`,
+          )
         );
       }
       if (state.topOutputs && state.topOutputs.length) {
@@ -163,11 +170,16 @@ if (import.meta.main) {
       ? (err as any).message
       : String(err);
     console.error("CLI failed:", msg);
-    if (String(err).includes("Chroma collection") || String(err).includes("ChromaNotFoundError")) {
+    if (
+      String(err).includes("Chroma collection") ||
+      String(err).includes("ChromaNotFoundError")
+    ) {
       console.error(
         "Hint: List collections with curl: curl -s ${Deno.env.get('CHROMA_URL') || 'http://localhost:8000'}/api/v1/collections | jq -r '.collections[].name'",
       );
-      console.error("Then set CHROMA_COLLECTION to one of the available names and re-run.");
+      console.error(
+        "Then set CHROMA_COLLECTION to one of the available names and re-run.",
+      );
     }
     Deno.exit(1);
   }

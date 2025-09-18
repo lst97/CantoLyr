@@ -19,7 +19,7 @@
   }
   return groups.join(" ");
 }malized-chars.jsonl
- *  - data/normalized/normalized-vocab.jsonl
+ *  - data/normalized/vocab.jsonl
  *  - data/preprocess/lyrics (recursive)
  *
  * Default Outputs:
@@ -223,7 +223,10 @@ function toChromaLexiconJSONLines(
 // ------------------------------------------------------------
 // Lyrics
 // ------------------------------------------------------------
-function groupTonePatternByTokens(tonePattern: number[], tokens: any[]): string {
+function groupTonePatternByTokens(
+  tonePattern: number[],
+  tokens: any[],
+): string {
   if (!tonePattern.length || !tokens.length) return tonePattern.join(" ");
   const groups: string[] = [];
   let index = 0;
@@ -267,7 +270,11 @@ function toChromaLyricsJSONLines(inputJsonl: string, producedIds: Set<string>) {
       continue;
     }
     if (!obj || typeof obj.text !== "string") continue;
-    const id = buildLyricId(obj.context_links?.doc_id, obj.structure?.line_index, obj.text);
+    const id = buildLyricId(
+      obj.context_links?.doc_id,
+      obj.structure?.line_index,
+      obj.text,
+    );
     if (producedIds.has(id)) continue;
 
     const document = buildLyricDocument(obj);
@@ -409,7 +416,10 @@ async function main() {
   );
 
   if (lyricsChroma) {
-    await Deno.writeTextFile(lyricsOut, lyricsChroma + (lyricsChroma ? "\n" : ""));
+    await Deno.writeTextFile(
+      lyricsOut,
+      lyricsChroma + (lyricsChroma ? "\n" : ""),
+    );
     logger.info(
       `✅ Wrote ${lyricsOut} (${lyricsChroma.split(/\n/).filter(Boolean).length} lines)`,
     );

@@ -23,15 +23,19 @@ async function main() {
   await load({ export: true });
 
   // Mode: 'lexicon' | 'lyrics' | 'all'
-  const mode = (Deno.args[0] || Deno.env.get("INGEST_MODE") || "all").toLowerCase();
+  const mode = (Deno.args[0] || Deno.env.get("INGEST_MODE") || "all")
+    .toLowerCase();
 
   // Inputs/collections: allow override via args, else env, else defaults
-  const _lexiconInput = Deno.env.get("LEXICON_INPUT") || "data/vector/chroma-lexicon.jsonl";
-  const _lyricsInput = Deno.env.get("LYRICS_INPUT") || "data/vector/chroma-lyrics.jsonl";
+  const _lexiconInput = Deno.env.get("LEXICON_INPUT") ||
+    "data/vector/chroma-lexicon.jsonl";
+  const _lyricsInput = Deno.env.get("LYRICS_INPUT") ||
+    "data/vector/chroma-lyrics.jsonl";
 
   const _lexiconCollection = Deno.env.get("CHROMA_COLLECTION_LEXICON") ||
     Deno.env.get("CHROMA_COLLECTION") || "cantolyr_lexicon_v1_1024";
-  const _lyricsCollection = Deno.env.get("CHROMA_COLLECTION_LYRICS") || "cantolyr_lyrics_v1_1024";
+  const _lyricsCollection = Deno.env.get("CHROMA_COLLECTION_LYRICS") ||
+    "cantolyr_lyrics_v1_1024";
 
   const scriptDir = path.dirname(path.fromFileUrl(import.meta.url));
   const chromaDir = path.resolve(scriptDir, "../chroma");
@@ -74,7 +78,9 @@ async function main() {
     logger.warn(`⚠️ Unknown mode '${mode}', defaulting to 'all'`);
   }
 
-  logger.info(`🚀 Running ingest (${mode}) via venv: ${venvPython} ${args.join(" ")}`);
+  logger.info(
+    `🚀 Running ingest (${mode}) via venv: ${venvPython} ${args.join(" ")}`,
+  );
   const code = await run(venvPython, args);
   if (code !== 0) {
     logger.error(`❌ Python ingest exited with code ${code}`);

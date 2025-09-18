@@ -1,4 +1,17 @@
 -- Dev reset: drop objects if exist
+DROP TABLE IF EXISTS "public"."tone_ngrams" CASCADE;
+DROP TABLE IF EXISTS "public"."syllables" CASCADE;
+DROP TABLE IF EXISTS "public"."tokens" CASCADE;
+DROP TABLE IF EXISTS "public"."lyric_keywords" CASCADE;
+DROP TABLE IF EXISTS "public"."keywords" CASCADE;
+DROP TABLE IF EXISTS "public"."lyric_themes" CASCADE;
+DROP TABLE IF EXISTS "public"."themes" CASCADE;
+DROP TABLE IF EXISTS "public"."lyric_lines" CASCADE;
+DROP TABLE IF EXISTS "public"."song_lyricists" CASCADE;
+DROP TABLE IF EXISTS "public"."song_artists" CASCADE;
+DROP TABLE IF EXISTS "public"."lyricists" CASCADE;
+DROP TABLE IF EXISTS "public"."artists" CASCADE;
+DROP TABLE IF EXISTS "public"."songs" CASCADE;
 DROP TABLE IF EXISTS "public"."feedback" CASCADE;
 DROP TABLE IF EXISTS "public"."readings" CASCADE;
 DROP TABLE IF EXISTS "public"."entries" CASCADE;

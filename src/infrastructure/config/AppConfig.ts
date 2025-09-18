@@ -57,7 +57,8 @@ export type AppConfig = z.infer<typeof AppConfigSchema>;
  */
 export function getConfig(): AppConfig {
   // Prefer Accelerate URL if provided; fallback to direct Postgres URL
-  const dbUrl = Deno.env.get("PRISMA_ACCELERATE_URL") || Deno.env.get("DATABASE_URL") || "";
+  const dbUrl = Deno.env.get("PRISMA_ACCELERATE_URL") ||
+    Deno.env.get("DATABASE_URL") || "";
 
   const config = {
     env: Deno.env.get("DENO_ENV") || "development",

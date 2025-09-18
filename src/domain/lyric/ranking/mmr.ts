@@ -37,8 +37,10 @@ export function selectWithMMR(
       const avgPenalty = selected.reduce((acc, s) => acc + (s.diversityPenalty ?? 0), 0) /
         selected.length;
       // MMR scoring: lambda * relevance - (1-lambda) * similarityPenalty (here using candidate penalty + avgPenalty)/2
-      const diversityComponent = ((cand.diversityPenalty ?? 0) + avgPenalty) / 2;
-      const mmrScore = lambda * (cand.relevanceScore ?? 0) - (1 - lambda) * diversityComponent;
+      const diversityComponent = ((cand.diversityPenalty ?? 0) + avgPenalty) /
+        2;
+      const mmrScore = lambda * (cand.relevanceScore ?? 0) -
+        (1 - lambda) * diversityComponent;
       if (mmrScore > bestScore) {
         bestScore = mmrScore;
         bestIdx = i;

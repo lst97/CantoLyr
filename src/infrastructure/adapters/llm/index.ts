@@ -52,7 +52,9 @@ export function createPrefilterService(): PrefilterService {
  * Legacy factory function to create appropriate LLM reranker based on configuration
  * @deprecated Use createLlmGroupedSelector instead
  */
-export function createLlmReranker(config: LegacyLlmConfig & { provider?: string }): LlmReranker {
+export function createLlmReranker(
+  config: LegacyLlmConfig & { provider?: string },
+): LlmReranker {
   const provider = config.provider?.toLowerCase() || "dummy";
 
   switch (provider) {

@@ -197,7 +197,8 @@ export class DatabaseSeeder {
                 entryId: createdEntry.id,
                 jyutping: tokens as any,
                 tone: (reading as any).tone ?? (reading as any).toneOriginal,
-                pronunciation: (reading as any).pronunciation ?? (reading as any).toneMapped,
+                pronunciation: (reading as any).pronunciation ??
+                  (reading as any).toneMapped,
                 consonants: (reading as any).consonants ?? [],
                 rhymes: (reading as any).rhymes ?? [],
                 syllables: (reading as any).syllables,

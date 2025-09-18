@@ -8,7 +8,6 @@
     "db:migrate": "deno run -A npm:prisma@latest migrate dev",
     "db:populate": "deno run -A npm:prisma@latest generate && deno run -A scripts/populate-main-db.ts",
     "db:reset-seed": "deno run -A scripts/db-reset-seed.ts",
-    "db:bootstrap": "deno run -A scripts/normalize-seed-db.ts",
     "vector:ingest": "deno run -A scripts/ingest-chroma.ts",
     "vector:bootstrap": "deno run -A scripts/bootstrap-chroma.ts",
     "vector:reset": "deno run -A scripts/reset-chroma.ts",
@@ -34,12 +33,10 @@
     }
   },
   "fmt": {
-    "options": {
-      "useTabs": false,
-      "lineWidth": 100,
-      "indentWidth": 2,
-      "singleQuote": false
-    }
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": false
   },
   "imports": {
     "chromadb": "npm:chromadb@^3.0.14",

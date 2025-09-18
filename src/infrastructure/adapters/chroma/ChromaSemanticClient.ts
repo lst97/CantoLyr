@@ -51,7 +51,10 @@ export class ChromaSemanticClient {
   private withTimeout<T>(p: Promise<T>): Promise<T> {
     if (!this.timeoutMs) return p;
     return new Promise<T>((resolve, reject) => {
-      const id = setTimeout(() => reject(new Error("CHROMA_TIMEOUT")), this.timeoutMs);
+      const id = setTimeout(
+        () => reject(new Error("CHROMA_TIMEOUT")),
+        this.timeoutMs,
+      );
       p.then((v) => {
         clearTimeout(id);
         resolve(v);
@@ -64,7 +67,9 @@ export class ChromaSemanticClient {
 
   async health(): Promise<boolean> {
     try {
-      const res = await this.withTimeout(fetch(`${this.baseUrl}/api/v1/heartbeat`));
+      const res = await this.withTimeout(
+        fetch(`${this.baseUrl}/api/v1/heartbeat`),
+      );
       return res.ok;
     } catch (_) {
       return false;
@@ -74,7 +79,10 @@ export class ChromaSemanticClient {
   /**
    * Single semantic query for a prompt text.
    */
-  async query(prompt: string, opts: ChromaQueryOptions = {}): Promise<ChromaSemanticMatch[]> {
+  async query(
+    prompt: string,
+    opts: ChromaQueryOptions = {},
+  ): Promise<ChromaSemanticMatch[]> {
     const vectors = await this.embeddingFn.embed([prompt]);
     const topK = opts.topK ?? 10;
     const include = ["documents"];

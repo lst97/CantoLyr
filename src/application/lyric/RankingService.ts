@@ -26,7 +26,12 @@ export interface RankingRequest {
   candidates: SentenceCandidate[];
   config: RankingConfig;
   // Optional context to enable LLM-based reranking
-  sceneIntent?: { title: string; emotions: string[]; microIntent: string; continuityNotes: string };
+  sceneIntent?: {
+    title: string;
+    emotions: string[];
+    microIntent: string;
+    continuityNotes: string;
+  };
   previousLines?: string[];
 }
 
@@ -61,7 +66,12 @@ export interface ParagraphRankingRequest {
   lineIndex: number;
   groups: ParagraphGroup[]; // ordered groups (e.g., first 3 patterns), each with up to ~5 candidates
   config: RankingConfig;
-  sceneIntent?: { title: string; emotions: string[]; microIntent: string; continuityNotes: string };
+  sceneIntent?: {
+    title: string;
+    emotions: string[];
+    microIntent: string;
+    continuityNotes: string;
+  };
   previousLines?: string[];
   topParagraphCount?: number; // how many paragraphs to return (default 3)
 }
@@ -69,7 +79,11 @@ export interface ParagraphRankingRequest {
 export interface ParagraphRankingResult {
   lineIndex: number;
   top3: Array<
-    { paragraph: string; lines: Array<{ text: string; patternId: string }>; score: number }
+    {
+      paragraph: string;
+      lines: Array<{ text: string; patternId: string }>;
+      score: number;
+    }
   >;
   metrics: { totalParagraphs: number };
 }
@@ -82,7 +96,8 @@ export class RankingService {
   constructor() {
     this.geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? undefined;
     this.geminiRerankModel = Deno.env.get("GEMINI_RERANK_MODEL") ??
-      (Deno.env.get("GEMINI_SCENE_MODEL") ?? "gemini-2.0-flash-lite-preview-02-05");
+      (Deno.env.get("GEMINI_SCENE_MODEL") ??
+        "gemini-2.0-flash-lite-preview-02-05");
     if (this.geminiApiKey) {
       try {
         this.genAI = new GoogleGenAI({ apiKey: this.geminiApiKey });
@@ -107,9 +122,9 @@ export class RankingService {
       // ignore and fall back
     }
     try {
-      const parts: any[] = res?.response?.candidates?.[0]?.content?.parts
-        ?? res?.candidates?.[0]?.content?.parts
-        ?? [];
+      const parts: any[] = res?.response?.candidates?.[0]?.content?.parts ??
+        res?.candidates?.[0]?.content?.parts ??
+        [];
       const raw = parts
         .map((p: any) => p?.text ?? p?.inline_data?.data ?? "")
         .filter(Boolean)
@@ -143,7 +158,9 @@ export class RankingService {
       if (bracket) {
         try {
           const arr = JSON.parse(bracket[0]);
-          if (Array.isArray(arr)) return arr.map((x: unknown) => Number(x) || 0);
+          if (Array.isArray(arr)) {
+            return arr.map((x: unknown) => Number(x) || 0);
+          }
         } catch {
           // ignore
         }
@@ -188,7 +205,11 @@ export class RankingService {
         const res: any = await this.genAI!.models.generateContent({
           model: this.geminiRerankModel,
           contents: [{ role: "user", parts: [{ text: content }] }],
-          config: { temperature: 0.0, responseMimeType: "application/json", maxOutputTokens: 256 },
+          config: {
+            temperature: 0.0,
+            responseMimeType: "application/json",
+            maxOutputTokens: 256,
+          },
         });
         const raw = await this.extractLLMText(res);
         llmScores = this.parseScoresFromText(raw);
@@ -244,12 +265,20 @@ export class RankingService {
   }
 
   // Build all combinations picking one candidate from each group and score paragraphs
-  async selectTopParagraphs(req: ParagraphRankingRequest): Promise<ParagraphRankingResult> {
+  async selectTopParagraphs(
+    req: ParagraphRankingRequest,
+  ): Promise<ParagraphRankingResult> {
     const groups = req.groups.filter((g) => (g.candidates?.length ?? 0) > 0);
     const topN = req.topParagraphCount ?? 3;
     if (groups.length < 1) {
-      console.warn(`[RankingService] Paragraph ranking needs at least 1 group; got ${groups.length}`);
-      return { lineIndex: req.lineIndex, top3: [], metrics: { totalParagraphs: 0 } };
+      console.warn(
+        `[RankingService] Paragraph ranking needs at least 1 group; got ${groups.length}`,
+      );
+      return {
+        lineIndex: req.lineIndex,
+        top3: [],
+        metrics: { totalParagraphs: 0 },
+      };
     }
     // Cap per-group to reasonable size (default 5) to avoid explosion
     const capped = groups.map((g) => ({
@@ -275,11 +304,17 @@ export class RankingService {
     let paragraphs: string[][] = [];
     let error: string | undefined;
     try {
-      if (!this.genAI || !this.geminiApiKey) throw new Error("LLM not available");
+      if (!this.genAI || !this.geminiApiKey) {
+        throw new Error("LLM not available");
+      }
       const res: any = await this.genAI.models.generateContent({
         model: this.geminiRerankModel,
         contents: [{ role: "user", parts: [{ text: content }] }],
-        config: { temperature: 0.2, responseMimeType: "application/json", maxOutputTokens: 1024 },
+        config: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+          maxOutputTokens: 1024,
+        },
       });
       const raw = await this.extractLLMText(res);
       const json = (() => {
@@ -288,7 +323,9 @@ export class RankingService {
       })();
       const parsed = JSON.parse(json);
       if (Array.isArray(parsed?.paragraphs)) {
-        paragraphs = parsed.paragraphs.filter((arr: unknown) => Array.isArray(arr) && arr.length === groups.length);
+        paragraphs = parsed.paragraphs.filter((arr: unknown) =>
+          Array.isArray(arr) && arr.length === groups.length
+        );
       } else {
         error = "LLM did not return paragraphs array";
       }
@@ -299,17 +336,27 @@ export class RankingService {
     // Fallback: if LLM fails, return empty or best-effort
     if (!paragraphs.length) {
       // fallback: pick first candidate per line, repeat for topN
-      paragraphs = Array.from({ length: topN }, () => capped.map((g) => g.candidates[0]?.text ?? ""));
+      paragraphs = Array.from(
+        { length: topN },
+        () => capped.map((g) => g.candidates[0]?.text ?? ""),
+      );
     }
     const topNParas = paragraphs.slice(0, topN).map((linesArr) => {
-      const lines = linesArr.map((text, i) => ({ text, patternId: capped[i].patternId }));
+      const lines = linesArr.map((text, i) => ({
+        text,
+        patternId: capped[i].patternId,
+      }));
       return {
         paragraph: lines.map((l) => l.text).join("\n"),
         lines,
         score: 0, // LLM does not return score; could add if needed
       };
     });
-    return { lineIndex: req.lineIndex, top3: topNParas, metrics: { totalParagraphs: paragraphs.length } };
+    return {
+      lineIndex: req.lineIndex,
+      top3: topNParas,
+      metrics: { totalParagraphs: paragraphs.length },
+    };
   }
 }
 

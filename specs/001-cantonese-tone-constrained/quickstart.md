@@ -32,12 +32,22 @@ Tone Sequences:
     {
       "index": 0,
       "digitSet": ["22", "5", "33", "9", "4", "25", "3", "39", "42", "59", "2"],
-      "candidatePoolStats": { "semanticCount": 192, "freqTopCount": 100, "freqRandomCount": 50 },
-      "top3": [{ "text": "...", "patternId": "baseline" }, { "text": "..." }, { "text": "..." }],
+      "candidatePoolStats": {
+        "semanticCount": 192,
+        "freqTopCount": 100,
+        "freqRandomCount": 50
+      },
+      "top3": [
+        { "text": "...", "patternId": "baseline" },
+        { "text": "..." },
+        { "text": "..." }
+      ],
       "warnings": ["WARN_LOW_SEMANTIC"]
     }
   ],
-  "paragraphVariants": [{ "id": "p1", "sentences": ["...", "...", "...", "..."], "finalRank": 1 }],
+  "paragraphVariants": [
+    { "id": "p1", "sentences": ["...", "...", "...", "..."], "finalRank": 1 }
+  ],
   "config": { "semanticTarget": 200, "freqTop": 100, "freqRandom": 50 }
 }
 ```
@@ -94,7 +104,10 @@ for (const ts of session.toneSequences) {
     continuityContext: { previousLines: session.accepted },
     config: generationConfig,
   });
-  const ranked = rankingService.selectTop3({ lineIndex: ts.index, candidates: gen.sentences });
+  const ranked = rankingService.selectTop3({
+    lineIndex: ts.index,
+    candidates: gen.sentences,
+  });
   updateLine(session, ranked);
 }
 const paragraphs = paragraphService.assemble({ lines: session.lines });

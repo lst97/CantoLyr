@@ -45,14 +45,17 @@ export class ConstrainedGenerationLLM {
   constructor(cfg: ConstrainedGenerationLLMConfig = {}) {
     this.apiKey = cfg.apiKey ?? Deno.env.get("GEMINI_API_KEY");
     this.model = cfg.model ?? "gemini-pro";
-    this.endpoint = cfg.endpoint ?? "https://generativelanguage.googleapis.com/v1beta/models";
+    this.endpoint = cfg.endpoint ??
+      "https://generativelanguage.googleapis.com/v1beta/models";
     this.temperature = cfg.temperature ?? 0.7;
     this.maxOutputTokens = cfg.maxOutputTokens ?? 512;
     this.enabled = cfg.enable ?? true;
     this.maxRetries = cfg.maxRetries ?? 2;
   }
 
-  async generate(req: ConstrainedGenerationRequest): Promise<ConstrainedGenerationResponse> {
+  async generate(
+    req: ConstrainedGenerationRequest,
+  ): Promise<ConstrainedGenerationResponse> {
     if (!this.enabled || !this.apiKey) {
       return this.fallback(req);
     }
@@ -85,7 +88,10 @@ export class ConstrainedGenerationLLM {
     const url = `${this.endpoint}/${this.model}:generateContent?key=${this.apiKey}`;
     const body = {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: this.temperature, maxOutputTokens: this.maxOutputTokens },
+      generationConfig: {
+        temperature: this.temperature,
+        maxOutputTokens: this.maxOutputTokens,
+      },
     };
     const res = await fetch(url, {
       method: "POST",
@@ -97,7 +103,10 @@ export class ConstrainedGenerationLLM {
     return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   }
 
-  private parseOutput(raw: string, toneSequence: string): ConstrainedGenerationResponse {
+  private parseOutput(
+    raw: string,
+    toneSequence: string,
+  ): ConstrainedGenerationResponse {
     const variants: ConstrainedGenerationVariant[] = [];
     for (const line of raw.split(/\n+/)) {
       const trimmed = line.trim();
@@ -123,7 +132,9 @@ export class ConstrainedGenerationLLM {
     return Number(ratio.toFixed(3));
   }
 
-  private fallback(req: ConstrainedGenerationRequest): ConstrainedGenerationResponse {
+  private fallback(
+    req: ConstrainedGenerationRequest,
+  ): ConstrainedGenerationResponse {
     // Deterministic pseudo lines by hashing index.
     const variants: ConstrainedGenerationVariant[] = [];
     for (let i = 0; i < req.variants; i++) {

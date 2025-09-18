@@ -47,7 +47,10 @@ export class SegmentationService {
     const digitSet = Array.from(set);
 
     const warnings: string[] = [];
-    if (digitSet.length < patterns.reduce<number>((acc, p) => Math.max(acc, p.groups.length), 0)) {
+    if (
+      digitSet.length <
+        patterns.reduce<number>((acc, p) => Math.max(acc, p.groups.length), 0)
+    ) {
       warnings.push(LyricWarningCode.WARN_LOW_SEMANTIC); // reuse as generic coverage warning (placeholder)
     }
 

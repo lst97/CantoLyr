@@ -10,6 +10,7 @@ export interface SessionExportMeta {
   createdAt: string; // ISO timestamp
   seed: number;
   lineCount: number;
+  processingTimeMs?: number;
 }
 
 export interface SessionExport {
@@ -39,7 +40,11 @@ export function serialize(state: SessionState, feature?: string): string {
   return JSON.stringify(toExport(state, feature), null, 2);
 }
 
-export function saveToFile(state: SessionState, path: string, feature?: string): Promise<void> {
+export function saveToFile(
+  state: SessionState,
+  path: string,
+  feature?: string,
+): Promise<void> {
   const data = serialize(state, feature);
   return Deno.writeTextFile(path, data);
 }

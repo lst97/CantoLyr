@@ -30,11 +30,15 @@ export class CrossEncoderScorer {
   private readonly maxPairsPerCall: number;
   private readonly embedder: EmbeddingProviderLike;
 
-  constructor(embedder: EmbeddingProviderLike, cfg: CrossEncoderScorerConfig = {}) {
+  constructor(
+    embedder: EmbeddingProviderLike,
+    cfg: CrossEncoderScorerConfig = {},
+  ) {
     this.embedder = embedder;
     this.apiKey = cfg.apiKey ?? Deno.env.get("GEMINI_API_KEY");
     this.model = cfg.model ?? "gemini-pro";
-    this.endpoint = cfg.endpoint ?? "https://generativelanguage.googleapis.com/v1beta/models";
+    this.endpoint = cfg.endpoint ??
+      "https://generativelanguage.googleapis.com/v1beta/models";
     this.temperature = cfg.temperature ?? 0.2;
     this.enabled = cfg.enable ?? true;
     this.maxPairsPerCall = cfg.maxPairsPerCall ?? 20;
@@ -104,7 +108,9 @@ export class CrossEncoderScorer {
     if (out.length < pairs.length) {
       const existingSet = new Set(out.map((ps) => `${ps.a}|${ps.b}`));
       const missing: Array<[string, string]> = [];
-      for (const [a, b] of pairs) if (!existingSet.has(`${a}|${b}`)) missing.push([a, b]);
+      for (const [a, b] of pairs) {
+        if (!existingSet.has(`${a}|${b}`)) missing.push([a, b]);
+      }
       // synchronous fallback
       const fb = this.simpleSimilarity(missing);
       out.push(...fb);
@@ -137,12 +143,17 @@ export class CrossEncoderScorer {
     }
     const map = new Map<string, number[]>();
     unique.forEach((u, i) => map.set(u, vectors[i]));
-    return pairs.map(([a, b]) => ({ a, b, score: this.cosine(map.get(a)!, map.get(b)!) }));
+    return pairs.map(([a, b]) => ({
+      a,
+      b,
+      score: this.cosine(map.get(a)!, map.get(b)!),
+    }));
   }
 
   private lenRatio(a: string, b: string): number {
     return Number(
-      (Math.min(a.length, b.length) / Math.max(1, Math.max(a.length, b.length))).toFixed(3),
+      (Math.min(a.length, b.length) / Math.max(1, Math.max(a.length, b.length)))
+        .toFixed(3),
     );
   }
 

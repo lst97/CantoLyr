@@ -13,13 +13,17 @@ const GROUP_SIZE_PROBS = [
 ];
 
 function isValidGroup(g: string): boolean {
-  return g.length >= 1 && g.length <= 2 && [...g].every((ch) => ALLOWED_DIGITS.has(ch));
+  return g.length >= 1 && g.length <= 2 &&
+    [...g].every((ch) => ALLOWED_DIGITS.has(ch));
 }
 
 function greedyPairs(seq: string): string[] {
   const groups: string[] = [];
   for (let i = 0; i < seq.length;) {
-    if (i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) && ALLOWED_DIGITS.has(seq[i + 1])) {
+    if (
+      i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) &&
+      ALLOWED_DIGITS.has(seq[i + 1])
+    ) {
       const group = seq.slice(i, i + 2);
       groups.push(group);
       i += 2;
@@ -42,7 +46,10 @@ function alternatingStartOne(seq: string): string[] {
       groups.push(group);
       i += 1;
     } else {
-      if (i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) && ALLOWED_DIGITS.has(seq[i + 1])) {
+      if (
+        i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) &&
+        ALLOWED_DIGITS.has(seq[i + 1])
+      ) {
         const group = seq.slice(i, i + 2);
         groups.push(group);
         i += 2;
@@ -63,7 +70,10 @@ function alternatingStartTwo(seq: string): string[] {
   let toggle = true; // true => 2 digits, false => 1 digit
   while (i < seq.length) {
     if (toggle) {
-      if (i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) && ALLOWED_DIGITS.has(seq[i + 1])) {
+      if (
+        i + 1 < seq.length && ALLOWED_DIGITS.has(seq[i]) &&
+        ALLOWED_DIGITS.has(seq[i + 1])
+      ) {
         const group = seq.slice(i, i + 2);
         groups.push(group);
         i += 2;
@@ -93,7 +103,10 @@ function hashToSeed(str: string): number {
   return (h & 0x7fffffff) + 1;
 }
 
-function randomMixAllowed(seq: string, rnd: { random: () => number }): string[] {
+function randomMixAllowed(
+  seq: string,
+  rnd: { random: () => number },
+): string[] {
   const groups: string[] = [];
   for (let i = 0; i < seq.length;) {
     const r = rnd.random();
@@ -121,7 +134,10 @@ function randomMixAllowed(seq: string, rnd: { random: () => number }): string[] 
   return groups;
 }
 
-function maybeSplitOneComposite(groups: string[], rnd: { random: () => number }): string[] {
+function maybeSplitOneComposite(
+  groups: string[],
+  rnd: { random: () => number },
+): string[] {
   const out = [...groups];
   const compositeIdx = out.findIndex((g) => g.length > 1);
   if (compositeIdx >= 0 && rnd.random() < 0.5) {
@@ -142,8 +158,13 @@ function maybeSplitOneComposite(groups: string[], rnd: { random: () => number })
   return out;
 }
 
-export function generatePatterns(toneSequence: string, seed?: number): SegmentationPattern[] {
-  if (!/^[0-9]+$/.test(toneSequence)) throw new Error("Tone sequence must be digits");
+export function generatePatterns(
+  toneSequence: string,
+  seed?: number,
+): SegmentationPattern[] {
+  if (!/^[0-9]+$/.test(toneSequence)) {
+    throw new Error("Tone sequence must be digits");
+  }
   if (toneSequence.length === 0) throw new Error("Tone sequence empty");
 
   const effSeed = seed ? seed : hashToSeed("SEG:" + toneSequence);

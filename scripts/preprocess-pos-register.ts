@@ -103,14 +103,19 @@ type AllowedRegister = typeof DEFAULT_ALLOWED_REGISTER[number];
 type CacheFormat = {
   version: number;
   updatedAt: string;
-  data: Record<string, { pos: AllowedPOS | string; register: AllowedRegister | string }>; // keyed by surface
+  data: Record<
+    string,
+    { pos: AllowedPOS | string; register: AllowedRegister | string }
+  >; // keyed by surface
 };
 
 function loadCache(cachePath: string): CacheFormat {
   try {
     const raw = readFileSync(cachePath, "utf-8");
     const parsed = JSON.parse(raw) as CacheFormat;
-    if (!parsed || typeof parsed !== "object" || !parsed.data) throw new Error("invalid cache");
+    if (!parsed || typeof parsed !== "object" || !parsed.data) {
+      throw new Error("invalid cache");
+    }
     return parsed;
   } catch {
     return { version: 1, updatedAt: new Date().toISOString(), data: {} };
@@ -232,7 +237,11 @@ async function classifyBatch(
 
   const res = await Promise.race([responsePromise, timeoutPromise]);
   const text = extractText(res);
-  if (!text) throw new Error(`No text content in Gemini response ${JSON.stringify(res)}`);
+  if (!text) {
+    throw new Error(
+      `No text content in Gemini response ${JSON.stringify(res)}`,
+    );
+  }
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   const payload = jsonMatch ? jsonMatch[0] : text;
   const parsed = JSON.parse(payload) as Classification[];
@@ -247,7 +256,9 @@ async function classifyBatch(
 function extractText(response: any): string | undefined {
   try {
     if (!response) return undefined;
-    if (typeof response.text === "string" && response.text.trim()) return response.text;
+    if (typeof response.text === "string" && response.text.trim()) {
+      return response.text;
+    }
     const maybeResp = response.response ?? response;
     if (maybeResp && typeof maybeResp.text === "function") {
       const t = maybeResp.text();
@@ -268,7 +279,9 @@ function extractText(response: any): string | undefined {
         if (typeof c?.text === "string" && c.text.trim()) return c.text;
       }
     }
-    if (typeof maybeResp?.output_text === "string" && maybeResp.output_text.trim()) {
+    if (
+      typeof maybeResp?.output_text === "string" && maybeResp.output_text.trim()
+    ) {
       return maybeResp.output_text;
     }
     return undefined;
@@ -281,21 +294,33 @@ async function classifyWithCache(
   genAI: GoogleGenAI,
   surfaces: string[],
   cachePath: string,
-  opts: { model: string; batchSize: number; timeoutMs: number; maxRetries: number },
+  opts: {
+    model: string;
+    batchSize: number;
+    timeoutMs: number;
+    maxRetries: number;
+  },
 ): Promise<CacheFormat> {
   const cache = loadCache(cachePath);
   const pending = uniq(surfaces.filter((s) => s && !cache.data[s]));
   if (pending.length === 0) return cache;
 
   const batches = chunk(pending, Math.max(1, opts.batchSize));
-  logger.info(`Classifying ${pending.length} surfaces in ${batches.length} batch(es)...`);
+  logger.info(
+    `Classifying ${pending.length} surfaces in ${batches.length} batch(es)...`,
+  );
 
   for (let i = 0; i < batches.length; i++) {
     const b = batches[i];
     let attempt = 0;
     for (; attempt <= opts.maxRetries; attempt++) {
       try {
-        const results = await classifyBatch(genAI, b, opts.model, opts.timeoutMs);
+        const results = await classifyBatch(
+          genAI,
+          b,
+          opts.model,
+          opts.timeoutMs,
+        );
         for (const r of results) {
           if (!r?.surface) continue;
           cache.data[r.surface] = {
@@ -304,16 +329,21 @@ async function classifyWithCache(
           };
         }
         saveCache(cachePath, cache);
-        logger.info(`✔️  Batch ${i + 1}/${batches.length} cached (${results.length} items).`);
+        logger.info(
+          `✔️  Batch ${i + 1}/${batches.length} cached (${results.length} items).`,
+        );
         break; // success
       } catch (err) {
         if (attempt === opts.maxRetries) {
-          logger.error(`❌ Batch ${i + 1} failed after retries: ${(err as Error).message}`);
+          logger.error(
+            `❌ Batch ${i + 1} failed after retries: ${(err as Error).message}`,
+          );
           // Persist partial cache (if any)
           saveCache(cachePath, cache);
           throw err;
         }
-        const backoff = 500 * Math.pow(2, attempt) + Math.floor(Math.random() * 250);
+        const backoff = 500 * Math.pow(2, attempt) +
+          Math.floor(Math.random() * 250);
         logger.warn(
           `Retrying batch ${i + 1}/${batches.length} in ${backoff}ms due to: ${
             (err as Error).message
@@ -372,7 +402,8 @@ async function rewriteFileWithPOSRegister(
         // If no readings array, add/override top-level fields safely
         if (surface) {
           obj.pos = String(pos || obj.pos || "X").toUpperCase();
-          obj.register = String(register || obj.register || "NEUTRAL").toUpperCase();
+          obj.register = String(register || obj.register || "NEUTRAL")
+            .toUpperCase();
           touched++;
         }
       }
@@ -424,15 +455,20 @@ async function main() {
     }
   }
 
-  const filesArg = argMap.get("files") || "data/normalized/chars.jsonl,data/normalized/vocab.jsonl";
+  const filesArg = argMap.get("files") ||
+    "data/normalized/chars.jsonl,data/normalized/vocab.jsonl";
   const files = filesArg.split(",").map((s) => s.trim()).filter(Boolean);
-  const model = (argMap.get("model") || Deno.env.get("LLM_MODEL") || "gemini-2.5-flash-lite")
+  const model = (argMap.get("model") || Deno.env.get("LLM_MODEL") ||
+    "gemini-2.5-flash-lite")
     .trim();
   const batchSize = Math.max(1, Number(argMap.get("batch") || 250));
   const outDir = resolve(argMap.get("outDir") || "data/preprocess/lexicon");
   const resume = !argMap.has("no-resume");
   const cachePath = resolve(".cache/pos-register-cache.json");
-  const timeoutMs = Math.max(10000, Number(Deno.env.get("LLM_TIMEOUT_MS") || 180000));
+  const timeoutMs = Math.max(
+    10000,
+    Number(Deno.env.get("LLM_TIMEOUT_MS") || 180000),
+  );
   const maxRetries = Math.max(0, Number(Deno.env.get("LLM_MAX_RETRIES") || 2));
 
   const apiKey = Deno.env.get("GEMINI_API_KEY");

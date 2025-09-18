@@ -1,23 +1,10 @@
 import { PrismaClient } from "../prisma/generated/client.ts";
 import { exists } from "jsr:@std/fs/exists";
-import { dirname } from "jsr:@std/path";
 import { createDatabaseSeeder } from "../src/shared/utils/databaseSeeder.ts";
 import { getLogger } from "jsr:@std/log";
 import { load } from "jsr:@std/dotenv";
 
 const logger = getLogger();
-
-async function runNormalizer(script: string, args: string[]) {
-  const command = new Deno.Command(Deno.execPath(), {
-    args: ["run", "-A", script, ...args],
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  const { code } = await command.output();
-  if (code !== 0) {
-    throw new Error(`Normalizer failed: ${script} (exit ${code})`);
-  }
-}
 
 async function populateMainDatabase() {
   // Load environment variables from .env file
@@ -55,51 +42,66 @@ async function populateMainDatabase() {
       return;
     }
 
-    // Normalize via dedicated normalizer scripts to keep logic in sync
-    logger.info("📖 Normalizing input data via scripts...");
-    const charsOut = "data/normalized/chars.jsonl";
-    const vocabOut = "data/normalized/vocab.jsonl";
-    await Deno.mkdir(dirname(charsOut), { recursive: true });
-    // Run char normalizer
-    runNormalizer("scripts/normalize-charlist.ts", [
-      "data/sample/charlist.json",
-      charsOut,
-      "data/sample/char_detail.json",
-      "data/sample/char_freq.json",
-    ]);
-    // Run words normalizer (uses charlist for dedup and optional extras)
-    runNormalizer("scripts/normalize-wordslist.ts", [
-      "data/sample/wordslist.json",
-      vocabOut,
-      "data/sample/word_detail.json",
-      "data/sample/charlist.json",
-      "data/sample/book_word_freq.ts",
-    ]);
+    // Check for preprocessed files
+    logger.info("📖 Checking for preprocessed data files...");
+    const charsFile = "data/preprocess/lexicon/chars.posr.jsonl";
+    const vocabFile = "data/preprocess/lexicon/vocab.posr.jsonl";
 
-    // Seed using JSONL files
-    logger.info("💾 Inserting data into main database from JSONL...");
+    const charsExists = await exists(charsFile);
+    const vocabExists = await exists(vocabFile);
+
+    if (!charsExists || !vocabExists) {
+      logger.error("❌ Required preprocessed files are missing:");
+      if (!charsExists) {
+        logger.error(`   ❌ Missing: ${charsFile}`);
+      }
+      if (!vocabExists) {
+        logger.error(`   ❌ Missing: ${vocabFile}`);
+      }
+      logger.error("\n🔧 To generate these files, please run:");
+      logger.error("   1. First run normalization scripts:");
+      logger.error("      npm run normalize:chars");
+      logger.error("      npm run normalize:vocab");
+      logger.error("   2. Then run preprocessing scripts:");
+      logger.error("      npm run preprocess:lexicon");
+      logger.error("\n   Or run the complete preprocessing pipeline:");
+      logger.error("      npm run preprocess:all");
+      throw new Error(
+        "Preprocessed files not found. Please run preprocessing scripts first.",
+      );
+    }
+
+    logger.info("✅ Found preprocessed files:");
+
+    logger.info(`   ✅ ${charsFile}`);
+    logger.info(`   ✅ ${vocabFile}`);
+
+    // Seed using preprocessed JSONL files
+    logger.info(
+      "💾 Inserting data into main database from preprocessed JSONL...",
+    );
     const seeder = createDatabaseSeeder(prisma, {
       batchSize: 2048,
       logProgress: true,
     });
     let totalEntries = 0;
     let totalReadings = 0;
-    if (await exists(charsOut)) {
-      const res = await seeder.seedFromFile(charsOut);
-      totalEntries += res.insertedEntries;
-      totalReadings += res.insertedReadings;
-      logger.info(
-        `   ↳ Seeded chars: ${res.insertedEntries} entries, ${res.insertedReadings} readings`,
-      );
-    }
-    if (await exists(vocabOut)) {
-      const res = await seeder.seedFromFile(vocabOut);
-      totalEntries += res.insertedEntries;
-      totalReadings += res.insertedReadings;
-      logger.info(
-        `   ↳ Seeded vocab: ${res.insertedEntries} entries, ${res.insertedReadings} readings`,
-      );
-    }
+
+    // Seed characters
+    const charsRes = await seeder.seedFromFile(charsFile);
+    totalEntries += charsRes.insertedEntries;
+    totalReadings += charsRes.insertedReadings;
+    logger.info(
+      `   ↳ Seeded chars: ${charsRes.insertedEntries} entries, ${charsRes.insertedReadings} readings`,
+    );
+
+    // Seed vocabulary
+    const vocabRes = await seeder.seedFromFile(vocabFile);
+    totalEntries += vocabRes.insertedEntries;
+    totalReadings += vocabRes.insertedReadings;
+    logger.info(
+      `   ↳ Seeded vocab: ${vocabRes.insertedEntries} entries, ${vocabRes.insertedReadings} readings`,
+    );
     logger.info(
       `✅ Database population completed! Inserted: ${totalEntries} entries, ${totalReadings} readings.`,
     );

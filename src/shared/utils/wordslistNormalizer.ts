@@ -167,9 +167,10 @@ function determineLanguage(word: string): string {
   if (/^[A-Za-z][A-Za-z\s\-']*$/.test(word)) return "en";
   // Contains Chinese character → zh-HK
   if (
-    /[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf]/.test(
-      word,
-    )
+    /[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf]/
+      .test(
+        word,
+      )
   ) {
     return "zh-HK";
   }

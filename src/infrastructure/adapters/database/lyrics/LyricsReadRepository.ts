@@ -66,7 +66,9 @@ export class LyricsReadRepository implements LyricsRepo {
       and.push({ song: { artists: { some: { artist: { name: artist } } } } });
     }
     if (lyricist) {
-      and.push({ song: { lyricists: { some: { lyricist: { name: lyricist } } } } });
+      and.push({
+        song: { lyricists: { some: { lyricist: { name: lyricist } } } },
+      });
     }
     if (typeof year === "number") {
       and.push({ song: { year } });
@@ -107,7 +109,10 @@ export class LyricsReadRepository implements LyricsRepo {
       tokenCount: r.tokenCount,
       tonePatternText: r.tonePatternText,
       pronunciationBigrams: Array.isArray(r.toneNgrams)
-        ? r.toneNgrams.map((t: any) => ({ value: t.value, position: t.position }))
+        ? r.toneNgrams.map((t: any) => ({
+          value: t.value,
+          position: t.position,
+        }))
         : undefined,
       sentiment: r.sentiment,
       themes: Array.isArray(r.themes) ? r.themes.map((t: any) => t.theme.name) : undefined,

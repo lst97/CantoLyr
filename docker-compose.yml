@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17.6-alpine
     container_name: cantolyr-postgres
     restart: unless-stopped
     environment:

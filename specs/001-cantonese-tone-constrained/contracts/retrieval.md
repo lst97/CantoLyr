@@ -17,7 +17,12 @@ Generate semantic + frequency-enriched lexical candidate pool for one line (no f
     "microIntent": "Capture the excitement of meeting someone new.",
     "continuityNotes": "Opening line"
   },
-  "config": { "semanticTarget": 200, "freqTop": 100, "freqRandom": 50, "minSemanticThreshold": 150 }
+  "config": {
+    "semanticTarget": 200,
+    "freqTop": 100,
+    "freqRandom": 50,
+    "minSemanticThreshold": 150
+  }
 }
 ```
 
@@ -36,9 +41,24 @@ Generate semantic + frequency-enriched lexical candidate pool for one line (no f
     // ... others
   },
   "candidates": [
-    { "surface": "朋友", "toneDigit": "22", "provenance": "semantic", "sceneRelevanceScore": 0.83 },
-    { "surface": "笑", "toneDigit": "5", "provenance": "freq-top", "frequencyRank": 42 },
-    { "surface": "偶遇", "toneDigit": "33", "provenance": "semantic", "sceneRelevanceScore": 0.79 }
+    {
+      "surface": "朋友",
+      "toneDigit": "22",
+      "provenance": "semantic",
+      "sceneRelevanceScore": 0.83
+    },
+    {
+      "surface": "笑",
+      "toneDigit": "5",
+      "provenance": "freq-top",
+      "frequencyRank": 42
+    },
+    {
+      "surface": "偶遇",
+      "toneDigit": "33",
+      "provenance": "semantic",
+      "sceneRelevanceScore": 0.79
+    }
   ],
   "warnings": ["WARN_LOW_SEMANTIC"]
 }

@@ -80,7 +80,8 @@ async function ingest(url: string, collection: string, inputPath: string) {
 
 async function main() {
   await load({ export: true });
-  const chromaUrl = kv("url") || Deno.env.get("CHROMA_URL") || "http://localhost:8000";
+  const chromaUrl = kv("url") || Deno.env.get("CHROMA_URL") ||
+    "http://localhost:8000";
   const collection = kv("collection") ||
     Deno.env.get("CHROMA_COLLECTION") ||
     "cantolyr_lexicon_v1_1024";

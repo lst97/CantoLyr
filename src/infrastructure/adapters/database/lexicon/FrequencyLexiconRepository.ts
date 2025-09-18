@@ -52,7 +52,11 @@ export class FrequencyLexiconRepository {
   }
 
   /** Random sampling across digits with at most maxPerDigit each (seeded). */
-  getRandomSample(digits: string[], maxPerDigit: number, rng: SeedRng): FrequencyEntry[] {
+  getRandomSample(
+    digits: string[],
+    maxPerDigit: number,
+    rng: SeedRng,
+  ): FrequencyEntry[] {
     const pool = digits.length
       ? this.entries.filter((e) => digits.includes(e.toneDigit))
       : this.entries;
