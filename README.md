@@ -15,7 +15,7 @@ character/word retrieval based on mapped tone patterns.
 
 ### Prerequisites
 
-- Deno v1.40+
+- Deno v2.0+
 - Docker and Docker Compose
 - PostgreSQL (via Docker)
 
@@ -104,4 +104,4 @@ The project follows hexagonal architecture with:
 
 ## License
 
-MIT
+Apache 2.0
