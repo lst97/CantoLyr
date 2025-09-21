@@ -79,6 +79,9 @@ export interface ReadingRepo {
     query: Omit<SearchQuery, "limit" | "offset">,
   ): Promise<number>;
 
+  /** Count readings that contain a specific rhyme */
+  countByRhyme(query: { rhyme: string; entryType?: EntryType }): Promise<number>;
+
   /** Find readings that contain a specific rhyme in their decomposition */
   searchByRhyme(query: {
     rhyme: string;

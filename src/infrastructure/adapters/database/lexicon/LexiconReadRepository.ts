@@ -50,6 +50,20 @@ export class LexiconReadRepository implements ReadingRepo {
     });
   }
 
+  async countByRhyme(query: {
+    rhyme: string;
+    entryType?: EntryType;
+  }): Promise<number> {
+    const { rhyme, entryType } = query;
+    const entryTypeCondition = entryType ? { type: entryType } : {};
+    return await this.prisma.reading.count({
+      where: {
+        rhymes: { has: rhyme },
+        entry: entryTypeCondition,
+      },
+    });
+  }
+
   async searchByPronunciation(query: {
     pronunciation: string;
     isPrefix?: boolean;

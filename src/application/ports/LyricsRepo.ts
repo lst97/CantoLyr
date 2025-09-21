@@ -38,4 +38,7 @@ export interface LyricSearchParams {
 
 export interface LyricsRepo {
   searchLyricLines(params: LyricSearchParams): Promise<LyricLineDTO[]>;
+  countLyricLines(
+    params: Omit<LyricSearchParams, "limit" | "offset">,
+  ): Promise<number>;
 }

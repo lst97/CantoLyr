@@ -4,13 +4,15 @@ export const SearchPronunciationQuerySchema = z.object({
   p: z.string().min(1, "p is required"),
   mode: z.enum(["all", "vocab", "char"]).optional(),
   prefix: z.coerce.boolean().optional(),
-  limit: z.coerce.number().int().min(1).max(20480).optional(),
+  pageSize: z.coerce.number().int().min(1).max(20480).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
 });
 
 export const SearchRhymeQuerySchema = z.object({
   r: z.string().min(1, "rhyme is required"),
   mode: z.enum(["all", "vocab", "char"]).optional(),
-  limit: z.coerce.number().int().min(1).max(20480).optional(),
+  pageSize: z.coerce.number().int().min(1).max(20480).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
 });
 
 export const ReadingItemSchema = z.object({
@@ -36,6 +38,44 @@ export const SearchResponseSchema = z.object({
   query: z.string(),
   count: z.number().int().nonnegative(),
   items: z.array(ReadingItemSchema),
+  fromCache: z.boolean(),
+  processingTimeMs: z.number().int().nonnegative(),
+});
+
+const LyricPronunciationBigramSchema = z.object({
+  value: z.string(),
+  position: z.number().int().nonnegative(),
+});
+
+export const LyricSongSchema = z.object({
+  id: z.string(),
+  docId: z.string(),
+  title: z.string(),
+  year: z.number().int().nullable(),
+});
+
+export const LyricLineSchema = z.object({
+  id: z.string(),
+  lyricId: z.string(),
+  song: LyricSongSchema,
+  text: z.string(),
+  lineIndex: z.number().int().nonnegative(),
+  charCount: z.number().int().nonnegative(),
+  syllableCount: z.number().int().nonnegative(),
+  tokenCount: z.number().int().nonnegative(),
+  tonePatternText: z.string(),
+  pronunciationBigrams: z
+    .array(LyricPronunciationBigramSchema)
+    .optional(),
+  sentiment: z.string().nullable().optional(),
+  themes: z.array(z.string()).optional().nullable(),
+  keywords: z.array(z.string()).optional().nullable(),
+});
+
+export const LyricSearchResponseSchema = z.object({
+  query: z.string(),
+  count: z.number().int().nonnegative(),
+  items: z.array(LyricLineSchema),
   fromCache: z.boolean(),
   processingTimeMs: z.number().int().nonnegative(),
 });
