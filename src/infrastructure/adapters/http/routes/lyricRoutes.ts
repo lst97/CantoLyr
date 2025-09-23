@@ -1,6 +1,10 @@
 import type { Hono } from "hono";
 import { ZodError } from "zod";
-import { GenerateSessionRequestSchema } from "../schemas.ts";
+import {
+  GenerateSessionRequestSchema,
+  LyricGenerationResponseSchema,
+  LyricGenerateRequestSchema,
+} from "../schemas.ts";
 import type { Container } from "../../../container/Container.ts";
 import SegmentationService from "../../../../application/lyric/SegmentationService.ts";
 import RetrievalService, {
@@ -77,13 +81,153 @@ export function registerLyricRoutes(app: Hono, container: Container) {
   );
   const logger = container.resolve("logger");
 
+  app.post("/lyrics/generate", async (c) => {
+    const startedAt = Date.now();
+    try {
+      const body = await c.req.json();
+      const parsed = LyricGenerateRequestSchema.parse(body);
+      const toneInputs = Array.isArray(parsed.tones)
+        ? parsed.tones
+        : parsed.tones.split(",");
+      const toneSequences = toneInputs
+        .map((seq: string) => seq.trim())
+        .filter((seq: string) => seq.length > 0);
+      if (toneSequences.length === 0) {
+        return c.json({
+          error: {
+            code: "INVALID_REQUEST",
+            message: "tones must include at least one sequence",
+          },
+        }, 400);
+      }
+
+      const seed = parsed.seed ?? Math.floor(Math.random() * 1_000_000);
+      const config = buildDefaultLinePipelineConfig();
+      const sceneIntent = buildSceneIntent(parsed.prompt);
+
+      let themePlan: LineThemePlan[] = [];
+      try {
+        themePlan = await retrieval.generateStoryThemes(
+          toneSequences.length,
+          sceneIntent,
+          toneSequences,
+        );
+      } catch (themeError) {
+        logger.warning("generate_theme_plan_fallback", {
+          error: themeError instanceof Error ? themeError.message : String(themeError),
+        });
+        themePlan = Array.from({ length: toneSequences.length }, (_, idx) => ({
+          primary: `${sceneIntent.title}·${idx + 1}`,
+          subThemes: [],
+        }));
+      }
+
+      const state: SessionState = {
+        sessionId: crypto.randomUUID(),
+        seed,
+        lines: [],
+      };
+      const previousLines: string[] = [];
+
+      for (let i = 0; i < toneSequences.length; i++) {
+        const toneSeq = toneSequences[i];
+        const perLineSeed = deriveLineSeed(seed, toneSeq, i);
+        const overrides = themePlan?.[i];
+        try {
+          const lineResult = await sessionService.runLine(
+            i,
+            toneSeq,
+            sceneIntent,
+            config,
+            previousLines,
+            perLineSeed,
+            overrides?.primary,
+            overrides?.subThemes,
+          );
+          state.lines.push(lineResult);
+          if (lineResult.topSentences?.[0]?.text) {
+            previousLines.push(lineResult.topSentences[0].text);
+          }
+        } catch (lineError) {
+          const reason = lineError instanceof Error ? lineError.message : String(lineError);
+          logger.error("generate_line_failed", {
+            lineIndex: i,
+            toneSequence: toneSeq,
+            reason,
+          });
+          state.lines.push({
+            lineIndex: i,
+            toneSequence: toneSeq,
+            digitSet: [],
+            patterns: [],
+            candidatePoolStats: {
+              total: 0,
+              semanticCount: 0,
+              freqTopCount: 0,
+              freqRandomCount: 0,
+            },
+            topSentences: [],
+            topParagraphCandidates: [],
+            allLineCandidates: [],
+            warnings: [],
+            error: reason,
+          });
+        }
+      }
+
+      const topN = parsed.top ?? 3;
+      if (topN > 0) {
+        try {
+          const composed = await sessionService.composeParagraphs(
+            state.lines,
+            sceneIntent,
+            config.ranking,
+            topN,
+          );
+          state.topOutputs = composed.paragraphs;
+        } catch (composeError) {
+          logger.warning("generate_compose_failed", {
+            error: composeError instanceof Error ? composeError.message : String(composeError),
+          });
+        }
+      }
+
+      const feature = parsed.feature || "lyrics-generation";
+      const payload = toExport(state, feature);
+      const processingTimeMs = Date.now() - startedAt;
+      const response = LyricGenerationResponseSchema.parse({
+        ...payload,
+        meta: { ...payload.meta, processingTimeMs },
+      });
+      const json = JSON.stringify(response);
+      c.header("Content-Type", "application/json; charset=utf-8");
+      return c.body(json);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return c.json({
+          error: { code: "INVALID_REQUEST", message: error.issues },
+        }, 400);
+      }
+      logger.error("lyrics_generation_failed", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      return c.json({
+        error: {
+          code: "LYRIC_GENERATION_FAILED",
+          message: error instanceof Error ? error.message : "Failed to generate lyrics",
+        },
+      }, 500);
+    }
+  });
+
   app.post("/lyrics/session", async (c) => {
     const startedAt = Date.now();
     try {
       const parsed = GenerateSessionRequestSchema.parse(await c.req.json());
       const seed = parsed.seed ?? Math.floor(Math.random() * 1_000_000);
       const config = mergeConfig(parsed.config);
-      const toneSequences = parsed.toneSequences.map((seq) => seq.trim());
+      const toneSequences = parsed.toneSequences.map((seq: string) => seq.trim());
       const sceneIntent = buildSceneIntent(parsed.prompt, parsed.scene);
 
       let themePlan: LineThemePlan[] = [];

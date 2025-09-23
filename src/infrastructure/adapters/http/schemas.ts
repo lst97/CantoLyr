@@ -1,3 +1,5 @@
+export {};
+
 import { z } from "zod";
 
 export const SearchPronunciationQuerySchema = z.object({
@@ -79,6 +81,68 @@ export const AiLexiconSearchResponseSchema = z.object({
   processingTimeMs: z.number().int().nonnegative(),
 });
 
+const PatternSlotSchema = z.object({
+  id: z.string(),
+  toneDigit: z.string(),
+  posTag: z.string(),
+  description: z.string(),
+  retrievalPrompt: z.string(),
+});
+
+const LinePatternSchema = z.object({
+  id: z.string(),
+  patternString: z.string(),
+  groups: z.array(z.string()),
+  slots: z.array(PatternSlotSchema),
+});
+
+const CandidatePoolStatsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  semanticCount: z.number().int().nonnegative(),
+  freqTopCount: z.number().int().nonnegative(),
+  freqRandomCount: z.number().int().nonnegative(),
+});
+
+const LineCandidateSchema = z.object({
+  text: z.string(),
+  patternId: z.string(),
+});
+
+const LineSentenceSchema = z.object({
+  text: z.string(),
+  patternId: z.string(),
+  finalRank: z.number(),
+  mmrScore: z.number(),
+});
+
+const LineResultSchema = z.object({
+  lineIndex: z.number().int().nonnegative(),
+  toneSequence: z.string(),
+  digitSet: z.array(z.string()),
+  patterns: z.array(LinePatternSchema),
+  candidatePoolStats: CandidatePoolStatsSchema,
+  topSentences: z.array(LineSentenceSchema),
+  topParagraphCandidates: z.array(z.string()),
+  allLineCandidates: z.array(LineCandidateSchema),
+  warnings: z.array(z.string()),
+  error: z.string().optional(),
+});
+
+const SessionMetaSchema = z.object({
+  feature: z.string(),
+  version: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  seed: z.number().int().nonnegative(),
+  lineCount: z.number().int().nonnegative(),
+  processingTimeMs: z.number().int().nonnegative().optional(),
+});
+
+export const LyricGenerationResponseSchema = z.object({
+  meta: SessionMetaSchema,
+  lines: z.array(LineResultSchema),
+  topOutputs: z.array(z.string()).optional(),
+});
+
 const LyricPronunciationBigramSchema = z.object({
   value: z.string(),
   position: z.number().int().nonnegative(),
@@ -129,6 +193,9 @@ export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 export type AiLexiconSearchResponse = z.infer<
   typeof AiLexiconSearchResponseSchema
+>;
+export type LyricGenerationResponse = z.infer<
+  typeof LyricGenerationResponseSchema
 >;
 
 const ToneSequenceSchema = z.string()
@@ -181,3 +248,19 @@ export const GenerateSessionRequestSchema = z.object({
 export type GenerateSessionRequest = z.infer<
   typeof GenerateSessionRequestSchema
 >;
+
+export const LyricGenerateRequestSchema = z.object({
+  prompt: z.string().min(1, "prompt is required"),
+  tones: z.union([
+    z.string().min(1, "tones is required"),
+    z.array(z.string().min(1, "tone sequence must not be empty")).min(
+      1,
+      "tones must include at least one sequence",
+    ),
+  ]),
+  seed: z.coerce.number().int().min(0).optional(),
+  top: z.coerce.number().int().min(0).max(10).optional(),
+  feature: z.string().min(1).optional(),
+});
+
+export type LyricGenerateRequest = z.infer<typeof LyricGenerateRequestSchema>;
