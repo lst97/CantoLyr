@@ -208,6 +208,25 @@ export interface RetrievalResult {
   };
 }
 
+export interface AiLexiconMatch {
+  id: string;
+  surface: string;
+  type: string;
+  lang: string;
+  jyutping: string[];
+  pronunciation: string;
+  tone: string;
+  consonants: string[];
+  rhymes: string[];
+  syllables: number;
+  freq?: number;
+  pos?: string;
+  register?: string;
+  gloss?: string;
+  source?: string;
+  similarity: number;
+}
+
 export class RetrievalService {
   private chromaClient: ChromaClient | null = null;
   private chromaCollection: any | null = null;
@@ -231,6 +250,110 @@ export class RetrievalService {
     this.geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? undefined;
     this.geminiSceneModel = Deno.env.get("GEMINI_SCENE_MODEL") ??
       "gemini-2.5-flash-lite";
+  }
+
+  async searchLexiconByPronunciation(
+    params: { query: string; pronunciation: string; limit?: number },
+  ): Promise<AiLexiconMatch[]> {
+    const query = params.query?.trim();
+    const pronunciation = params.pronunciation?.trim();
+    if (!query || !pronunciation) {
+      return [];
+    }
+    const limit = Math.min(Math.max(params.limit ?? 25, 1), 200);
+    await this.ensureChroma();
+    await this.ensureEmbedding();
+    await this.ensureChromaCollection();
+    const collection = this.chromaCollection!;
+    const embedding = await this.embed(query);
+    const fetchCount = Math.max(limit * 3, 50);
+    const result = await collection.query({
+      queryEmbeddings: [embedding],
+      nResults: fetchCount,
+      include: ["metadatas", "distances"],
+      where: { pronunciation: { "$eq": pronunciation } },
+    });
+    const metadatas = (result.metadatas?.[0] ?? []) as Array<
+      Record<string, unknown>
+    >;
+    const distances = result.distances?.[0] ?? [];
+    const ids = result.ids?.[0] ?? [];
+    const matches: AiLexiconMatch[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < metadatas.length; i++) {
+      if (matches.length >= limit) break;
+      const md = metadatas[i] ?? {};
+      const surface = typeof md.surface === "string"
+        ? md.surface.trim()
+        : "";
+      if (!surface) continue;
+      const mdPron = typeof md.pronunciation === "string"
+        ? md.pronunciation.trim()
+        : String(md.pronunciation ?? "");
+      if (mdPron && mdPron !== pronunciation) continue;
+      const rawId = Array.isArray(ids) ? ids[i] : undefined;
+      const candidateId = typeof rawId === "string" && rawId
+        ? String(rawId)
+        : `${surface}|${pronunciation}`;
+      if (seen.has(candidateId)) continue;
+      let similarity = 0;
+      if (distances[i] != null) {
+        const dist = Number(distances[i]);
+        if (Number.isFinite(dist)) {
+          similarity = Math.max(0, Math.min(1, 1 - dist));
+        }
+      }
+      const jyutping = typeof md.jyutping === "string"
+        ? md.jyutping.split(/\s+/).filter(Boolean)
+        : [];
+      const consonants = typeof md.consonantsStr === "string"
+        ? md.consonantsStr.split(/\s+/).filter(Boolean)
+        : [];
+      const rhymes = typeof md.rhymesStr === "string"
+        ? md.rhymesStr.split(/\s+/).filter(Boolean)
+        : [];
+      const rawSyllables = typeof md.syllables === "number"
+        ? md.syllables
+        : Number.parseInt(String(md.syllables ?? ""), 10);
+      const syllables = Number.isFinite(rawSyllables) && rawSyllables >= 0
+        ? Math.trunc(rawSyllables)
+        : 0;
+      let freq: number | undefined;
+      if (md.freq != null) {
+        const parsedFreq = Number(md.freq);
+        if (Number.isFinite(parsedFreq)) {
+          freq = parsedFreq;
+        }
+      }
+      const match: AiLexiconMatch = {
+        id: candidateId,
+        surface,
+        type: typeof md.type === "string" && md.type ? String(md.type) : "vocab",
+        lang: typeof md.lang === "string" ? String(md.lang) : "",
+        jyutping,
+        pronunciation: mdPron || pronunciation,
+        tone: typeof md.tone === "string" ? String(md.tone) : "",
+        consonants,
+        rhymes,
+        syllables,
+        freq,
+        pos: typeof md.pos === "string" && md.pos ? String(md.pos) : undefined,
+        register: typeof md.register === "string" && md.register
+          ? String(md.register)
+          : undefined,
+        gloss: typeof md.gloss === "string" && md.gloss
+          ? String(md.gloss)
+          : undefined,
+        source: typeof md.source === "string" && md.source
+          ? String(md.source)
+          : undefined,
+        similarity,
+      };
+      matches.push(match);
+      seen.add(candidateId);
+    }
+    matches.sort((a, b) => b.similarity - a.similarity);
+    return matches.slice(0, limit);
   }
 
   async buildPool(req: RetrievalRequest): Promise<RetrievalResult> {

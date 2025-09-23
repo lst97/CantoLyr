@@ -15,6 +15,15 @@ export const SearchRhymeQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).optional(),
 });
 
+export const AiLexiconSearchQuerySchema = z.object({
+  q: z.string().min(1, "q is required"),
+  pronunciation: z.string()
+    .min(1, "pronunciation is required")
+    .max(4, "pronunciation must be at most 4 digits")
+    .regex(/^[394052]+$/, "pronunciation must only contain digits 3, 9, 4, 0, 5, 2"),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 export const ReadingItemSchema = z.object({
   id: z.string(),
   entryId: z.string().optional(),
@@ -38,6 +47,34 @@ export const SearchResponseSchema = z.object({
   query: z.string(),
   count: z.number().int().nonnegative(),
   items: z.array(ReadingItemSchema),
+  fromCache: z.boolean(),
+  processingTimeMs: z.number().int().nonnegative(),
+});
+
+export const AiLexiconSearchItemSchema = z.object({
+  id: z.string(),
+  surface: z.string(),
+  type: z.string(),
+  lang: z.string(),
+  jyutping: z.array(z.string()),
+  pronunciation: z.string(),
+  tone: z.string(),
+  consonants: z.array(z.string()),
+  rhymes: z.array(z.string()),
+  syllables: z.number().int().nonnegative(),
+  freq: z.number().optional(),
+  pos: z.string().optional(),
+  register: z.string().optional(),
+  gloss: z.string().optional(),
+  source: z.string().optional(),
+  similarity: z.number().min(0).max(1),
+});
+
+export const AiLexiconSearchResponseSchema = z.object({
+  query: z.string(),
+  pronunciation: z.string(),
+  count: z.number().int().nonnegative(),
+  items: z.array(AiLexiconSearchItemSchema),
   fromCache: z.boolean(),
   processingTimeMs: z.number().int().nonnegative(),
 });
@@ -90,6 +127,9 @@ export const ErrorResponseSchema = z.object({
 
 export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+export type AiLexiconSearchResponse = z.infer<
+  typeof AiLexiconSearchResponseSchema
+>;
 
 const ToneSequenceSchema = z.string()
   .min(3, "tone sequence must be at least 3 digits")
