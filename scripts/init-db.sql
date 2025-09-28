@@ -223,6 +223,7 @@ CREATE TABLE "public"."syllables" (
     "lyricId" BIGINT NOT NULL,
     "position" INTEGER NOT NULL,
     "jyutping" TEXT NOT NULL,
+    "jyutpingNormalized" TEXT,
     "consonant" TEXT,
     "rhyme" TEXT,
     "toneRaw" INTEGER,
@@ -282,6 +283,9 @@ CREATE INDEX "syllables_lyricId_position_idx" ON "public"."syllables"("lyricId",
 
 -- CreateIndex
 CREATE INDEX "syllables_rhyme_idx" ON "public"."syllables"("rhyme");
+
+-- CreateIndex
+CREATE INDEX "syllables_jyutpingNormalized_idx" ON "public"."syllables"("jyutpingNormalized");
 
 -- CreateIndex
 CREATE INDEX "syllables_toneDigit_idx" ON "public"."syllables"("toneDigit");

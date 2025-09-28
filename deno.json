@@ -7,7 +7,9 @@
     "db:generate": "deno run -A npm:prisma@latest generate",
     "db:migrate": "deno run -A npm:prisma@latest migrate dev",
     "db:populate": "deno run -A npm:prisma@latest generate && deno run -A scripts/populate-main-db.ts",
-    "db:reset-seed": "deno run -A scripts/db-reset-seed.ts",
+    "db:reset": "deno run -A scripts/db-reset.ts",
+    "db:seed": "deno run -A npm:prisma@latest generate && deno run -A scripts/populate-main-db.ts",
+    "db:reset-seed": "deno task db:reset && deno task db:seed",
     "vector:ingest": "deno run -A scripts/ingest-chroma.ts",
     "vector:bootstrap": "deno run -A scripts/bootstrap-chroma.ts",
     "vector:reset": "deno run -A scripts/reset-chroma.ts",
@@ -29,7 +31,7 @@
   "lint": {
     "rules": {
       "tags": ["recommended"],
-      "exclude": ["no-explicit-any"]
+      "exclude": ["no-unversioned-import", "no-explicit-any"]
     }
   },
   "fmt": {
@@ -39,11 +41,11 @@
     "singleQuote": false
   },
   "imports": {
-    "chromadb": "npm:chromadb@^3.0.14",
-    "zod": "npm:zod@^4.1.8",
-    "@huggingface/transformers": "npm:@huggingface/transformers@^3.0.0",
+    "chromadb": "npm:chromadb@^3.0.15",
+    "zod": "npm:zod@^4.1.11",
+    "@huggingface/transformers": "npm:@huggingface/transformers@^3.7.3",
     "opencc-js": "npm:opencc-js@^1.0.5",
     "ajv": "npm:ajv@^8.17.1",
-    "@google/genai": "npm:@google/genai@^1.19.0"
+    "@google/genai": "npm:@google/genai@^1.20.0"
   }
 }

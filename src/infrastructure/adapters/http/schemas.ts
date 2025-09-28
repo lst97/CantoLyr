@@ -148,11 +148,30 @@ const LyricPronunciationBigramSchema = z.object({
   position: z.number().int().nonnegative(),
 });
 
+const MatchedSyllableSchema = z.object({
+  position: z.number().int().nonnegative(),
+  jyutping: z.string(),
+  jyutpingNormalized: z.string().nullable().optional(),
+  consonant: z.string().nullable().optional(),
+  rhyme: z.string().nullable().optional(),
+  toneRaw: z.number().int().nullable().optional(),
+  toneDigit: z.number().int().nullable().optional(),
+});
+
 export const LyricSongSchema = z.object({
   id: z.string(),
   docId: z.string(),
   title: z.string(),
   year: z.number().int().nullable(),
+  artists: z.array(z.string()).optional(),
+  lyricists: z.array(z.string()).optional(),
+});
+
+const LyricTokenSchema = z.object({
+  position: z.number().int().nonnegative(),
+  text: z.string(),
+  pos: z.string().nullable().optional(),
+  syllables: z.array(MatchedSyllableSchema).optional(),
 });
 
 export const LyricLineSchema = z.object({
@@ -168,6 +187,11 @@ export const LyricLineSchema = z.object({
   pronunciationBigrams: z
     .array(LyricPronunciationBigramSchema)
     .optional(),
+  matchedSyllables: z
+    .array(MatchedSyllableSchema)
+    .optional(),
+  tokens: z.array(LyricTokenSchema).optional(),
+  syntaxNotes: z.string().nullable().optional(),
   sentiment: z.string().nullable().optional(),
   themes: z.array(z.string()).optional().nullable(),
   keywords: z.array(z.string()).optional().nullable(),
@@ -179,6 +203,53 @@ export const LyricSearchResponseSchema = z.object({
   items: z.array(LyricLineSchema),
   fromCache: z.boolean(),
   processingTimeMs: z.number().int().nonnegative(),
+});
+
+export const LyricFilterOptionsSchema = z.object({
+  themes: z.array(z.string()),
+  keywords: z.array(z.string()),
+  lyricists: z.array(z.string()),
+  artists: z.array(z.string()),
+  years: z.array(z.number().int()),
+  sentiments: z.array(z.string()),
+});
+
+export const LyricFilterOptionsResponseSchema = z.object({
+  options: LyricFilterOptionsSchema,
+  fromCache: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+export const LyricSearchQuerySchema = z.object({
+  tone: z.string().min(1, "tone is required when rhythm is absent").optional(),
+  tonePosition: z.coerce.number().int().positive().optional(),
+  rhyme: z.string().min(1, "rhyme is required when tone is absent").optional(),
+  rhythm: z.string().min(1).optional(),
+  rythem: z.string().min(1).optional(),
+  rhymePosition: z.coerce.number().int().positive().optional(),
+  rhythmPosition: z.coerce.number().int().positive().optional(),
+  rythemPosition: z.coerce.number().int().positive().optional(),
+  themes: z.string().optional(),
+  keywords: z.string().optional(),
+  lyricist: z.string().optional(),
+  artist: z.string().optional(),
+  lyricId: z.string().optional(),
+  sentiment: z.string().optional(),
+  year: z.coerce.number().int().optional(),
+  pageSize: z.coerce.number().int().min(1).max(20480).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+}).superRefine((value, ctx) => {
+  const hasTone = typeof value.tone === "string" && value.tone.length > 0;
+  const hasRhyme = typeof value.rhyme === "string" && value.rhyme.length > 0;
+  const hasRhythm = typeof value.rhythm === "string" && value.rhythm.length > 0;
+  const hasRythem = typeof value.rythem === "string" && value.rythem.length > 0;
+  if (!hasTone && !hasRhyme && !hasRhythm && !hasRythem) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "tone or rhythm is required",
+      path: ["tone"],
+    });
+  }
 });
 
 export const ErrorResponseSchema = z.object({
@@ -197,57 +268,10 @@ export type AiLexiconSearchResponse = z.infer<
 export type LyricGenerationResponse = z.infer<
   typeof LyricGenerationResponseSchema
 >;
-
-const ToneSequenceSchema = z.string()
-  .min(3, "tone sequence must be at least 3 digits")
-  .max(20, "tone sequence must be at most 20 digits")
-  .regex(/^[0-9]+$/, "tone sequence must contain digits only");
-
-const RetrievalConfigOverrideSchema = z.object({
-  semanticTarget: z.number().positive().optional(),
-  freqTop: z.number().int().min(0).optional(),
-  freqRandom: z.number().int().min(0).optional(),
-  minSemanticThreshold: z.number().min(0).optional(),
-  semanticMinSimilarity: z.number().min(0).max(1).optional(),
-});
-
-const GenerationConfigOverrideSchema = z.object({
-  variantsPerPattern: z.number().int().min(1).max(10).optional(),
-  maxRetriesPerSentence: z.number().int().min(0).max(10).optional(),
-});
-
-const RankingConfigOverrideSchema = z.object({
-  topKSize: z.number().int().min(1).optional(),
-  mmrLambda: z.number().min(0).max(1).optional(),
-  similarityThreshold: z.number().min(0).max(1).optional(),
-  llmWeight: z.number().min(0).max(1).optional(),
-});
-
-export const GenerateSessionRequestSchema = z.object({
-  prompt: z.string().min(1, "prompt is required"),
-  toneSequences: z.array(ToneSequenceSchema).min(
-    1,
-    "toneSequences must not be empty",
-  ),
-  seed: z.coerce.number().int().min(0).optional(),
-  top: z.coerce.number().int().min(0).max(10).optional(),
-  feature: z.string().min(1).optional(),
-  scene: z.object({
-    title: z.string().min(1).optional(),
-    emotions: z.array(z.string().min(1)).max(6).optional(),
-    microIntent: z.string().optional(),
-    continuityNotes: z.string().optional(),
-  }).optional(),
-  config: z.object({
-    retrieval: RetrievalConfigOverrideSchema.optional(),
-    generation: GenerationConfigOverrideSchema.optional(),
-    ranking: RankingConfigOverrideSchema.optional(),
-  }).optional(),
-});
-
-export type GenerateSessionRequest = z.infer<
-  typeof GenerateSessionRequestSchema
+export type LyricFilterOptionsResponse = z.infer<
+  typeof LyricFilterOptionsResponseSchema
 >;
+export type LyricSearchQuery = z.infer<typeof LyricSearchQuerySchema>;
 
 export const LyricGenerateRequestSchema = z.object({
   prompt: z.string().min(1, "prompt is required"),

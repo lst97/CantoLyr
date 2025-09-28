@@ -1,7 +1,23 @@
+export interface LyricSongDTO {
+  id: bigint;
+  docId: string;
+  title: string;
+  year: number | null;
+  artists?: string[];
+  lyricists?: string[];
+}
+
+export interface LyricTokenDTO {
+  position: number;
+  text: string;
+  pos?: string | null;
+  syllables?: MatchedSyllableDTO[];
+}
+
 export interface LyricLineDTO {
   id: bigint;
   lyricId: string;
-  song: { id: bigint; docId: string; title: string; year: number | null };
+  song: LyricSongDTO;
   text: string;
   lineIndex: number;
   charCount: number;
@@ -9,10 +25,23 @@ export interface LyricLineDTO {
   tokenCount: number;
   tonePatternText: string; // comma-joined mapped digits
   pronunciationBigrams?: Array<{ value: string; position: number }>; // optional echo
+  matchedSyllables?: MatchedSyllableDTO[];
+  tokens?: LyricTokenDTO[];
+  syntaxNotes?: string | null;
   // For display/filters
   sentiment?: string | null;
   themes?: string[];
   keywords?: string[];
+}
+
+export interface MatchedSyllableDTO {
+  position: number;
+  jyutping: string;
+  jyutpingNormalized?: string | null;
+  consonant?: string | null;
+  rhyme?: string | null;
+  toneRaw?: number | null;
+  toneDigit?: number | null;
 }
 
 export interface LyricSearchParams {
@@ -36,9 +65,19 @@ export interface LyricSearchParams {
   offset?: number;
 }
 
+export interface LyricFilterOptionsDTO {
+  themes: string[];
+  keywords: string[];
+  lyricists: string[];
+  artists: string[];
+  years: number[];
+  sentiments: string[];
+}
+
 export interface LyricsRepo {
   searchLyricLines(params: LyricSearchParams): Promise<LyricLineDTO[]>;
   countLyricLines(
     params: Omit<LyricSearchParams, "limit" | "offset">,
   ): Promise<number>;
+  getLyricFilterOptions(): Promise<LyricFilterOptionsDTO>;
 }

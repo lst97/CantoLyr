@@ -1,9 +1,11 @@
 import type { Hono } from "hono";
 import { ZodError } from "zod";
 import {
-  GenerateSessionRequestSchema,
-  LyricGenerationResponseSchema,
+  LyricFilterOptionsResponseSchema,
   LyricGenerateRequestSchema,
+  LyricGenerationResponseSchema,
+  LyricSearchQuerySchema,
+  LyricSearchResponseSchema,
 } from "../schemas.ts";
 import type { Container } from "../../../container/Container.ts";
 import SegmentationService from "../../../../application/lyric/SegmentationService.ts";
@@ -13,29 +15,44 @@ import RetrievalService, {
 } from "../../../../application/lyric/RetrievalService.ts";
 import GenerationService from "../../../../application/lyric/GenerationService.ts";
 import RankingService from "../../../../application/lyric/RankingService.ts";
-import SessionService, {
-  LinePipelineConfig,
-  SessionState,
-} from "../../../../application/lyric/SessionService.ts";
+import SessionService, { SessionState } from "../../../../application/lyric/SessionService.ts";
 import { buildDefaultLinePipelineConfig } from "../../../../application/lyric/default-config.ts";
 import { toExport } from "../../../serialization/session-io.ts";
-import { LyricErrorCode } from "../../../../shared/lyric-codes.ts";
+import type {
+  LyricFilterOptionsDTO,
+  LyricLineDTO,
+  LyricSongDTO,
+  LyricsRepo,
+  LyricTokenDTO,
+  MatchedSyllableDTO,
+} from "../../../../application/ports/LyricsRepo.ts";
 
-interface ConfigOverride {
-  retrieval?: Partial<LinePipelineConfig["retrieval"]>;
-  generation?: Partial<LinePipelineConfig["generation"]>;
-  ranking?: Partial<LinePipelineConfig["ranking"]>;
+// Type guards and helpers to avoid `any` while checking optional fields
+function isObject(val: unknown): val is Record<string, unknown> {
+  return typeof val === "object" && val !== null;
 }
 
-function mergeConfig(
-  override?: ConfigOverride,
-): LinePipelineConfig {
-  const base = buildDefaultLinePipelineConfig();
-  if (!override) return base;
+function isLyricTokenDTOArray(val: unknown): val is LyricTokenDTO[] {
+  return Array.isArray(val) &&
+    val.every((t) => isObject(t) && typeof t.position === "number" && typeof t.text === "string");
+}
+
+function isMatchedSyllableDTOArray(val: unknown): val is MatchedSyllableDTO[] {
+  return Array.isArray(val) &&
+    val.every((syl) =>
+      isObject(syl) && typeof syl.position === "number" && typeof syl.jyutping === "string"
+    );
+}
+
+function mapMatchedSyllable(syllable: MatchedSyllableDTO) {
   return {
-    retrieval: { ...base.retrieval, ...override.retrieval },
-    generation: { ...base.generation, ...override.generation },
-    ranking: { ...base.ranking, ...override.ranking },
+    position: syllable.position,
+    jyutping: syllable.jyutping,
+    jyutpingNormalized: syllable.jyutpingNormalized ?? null,
+    consonant: syllable.consonant ?? null,
+    rhyme: syllable.rhyme ?? null,
+    toneRaw: syllable.toneRaw ?? null,
+    toneDigit: syllable.toneDigit ?? null,
   };
 }
 
@@ -80,15 +97,194 @@ export function registerLyricRoutes(app: Hono, container: Container) {
     ranking,
   );
   const logger = container.resolve("logger");
+  const cache = container.resolve("cache");
+  const FILTER_CACHE_KEY = "lyrics:filter-options";
+  const FILTER_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+
+  app.get("/lyrics/options", async (c) => {
+    try {
+      const cachedOptions = await cache.get<LyricFilterOptionsDTO>(FILTER_CACHE_KEY);
+      const responseBase = {
+        fetchedAt: new Date().toISOString(),
+      };
+
+      if (cachedOptions) {
+        const response = LyricFilterOptionsResponseSchema.parse({
+          ...responseBase,
+          fromCache: true,
+          options: cachedOptions,
+        });
+        const json = JSON.stringify(response);
+        c.header("Content-Type", "application/json; charset=utf-8");
+        return c.body(json);
+      }
+
+      const repo = container.resolve("lyricsRepo") as LyricsRepo;
+      const options = await repo.getLyricFilterOptions();
+      await cache.set(FILTER_CACHE_KEY, options, FILTER_CACHE_TTL_SECONDS);
+
+      const response = LyricFilterOptionsResponseSchema.parse({
+        ...responseBase,
+        fromCache: false,
+        options,
+      });
+      const json = JSON.stringify(response);
+      c.header("Content-Type", "application/json; charset=utf-8");
+      return c.body(json);
+    } catch (error) {
+      logger.error("lyrics_filter_options_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json({
+        error: {
+          code: "LYRIC_FILTER_OPTIONS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to load lyric filter options",
+        },
+      }, 500);
+    }
+  });
+
+  app.get("/lyrics/search", async (c) => {
+    const startedAt = Date.now();
+    try {
+      const query = LyricSearchQuerySchema.parse(c.req.query());
+      const repo = container.resolve("lyricsRepo") as LyricsRepo;
+
+      const toneValue = typeof query.tone === "string" ? query.tone.trim() : "";
+      const tone = toneValue.length > 0 ? toneValue : undefined;
+      const themes = query.themes
+        ? query.themes
+          .split(",")
+          .map((theme: string) => theme.trim())
+          .filter((theme: string) => theme.length > 0)
+        : undefined;
+      const keywords = query.keywords
+        ? query.keywords
+          .split(",")
+          .map((keyword: string) => keyword.trim())
+          .filter((keyword: string) => keyword.length > 0)
+        : undefined;
+
+      const rhymeInput = typeof query.rhyme === "string" && query.rhyme.length > 0
+        ? query.rhyme
+        : typeof query.rhythm === "string" && query.rhythm.length > 0
+        ? query.rhythm
+        : typeof query.rythem === "string" && query.rythem.length > 0
+        ? query.rythem
+        : undefined;
+      const rhymeValue = typeof rhymeInput === "string" ? rhymeInput.trim() : "";
+      const rhyme = rhymeValue.length > 0 ? rhymeValue : undefined;
+      const rhymePosition = query.rhymePosition ?? query.rhythmPosition ?? query.rythemPosition;
+
+      const [items, totalCount] = await Promise.all([
+        repo.searchLyricLines({
+          pronunciation: tone,
+          pronunciationPosition: query.tonePosition,
+          rhyme,
+          rhymePosition,
+          themes,
+          keywords,
+          lyricist: query.lyricist,
+          artist: query.artist,
+          id: query.lyricId,
+          sentiment: query.sentiment,
+          year: query.year,
+          limit: query.pageSize,
+          offset: query.offset,
+        }),
+        repo.countLyricLines({
+          pronunciation: tone,
+          pronunciationPosition: query.tonePosition,
+          rhyme,
+          rhymePosition,
+          themes,
+          keywords,
+          lyricist: query.lyricist,
+          artist: query.artist,
+          id: query.lyricId,
+          sentiment: query.sentiment,
+          year: query.year,
+        }),
+      ]);
+
+      const queryTerm = tone ?? rhyme ?? "";
+      const response = LyricSearchResponseSchema.parse({
+        query: queryTerm,
+        count: totalCount,
+        items: items.map((item: LyricLineDTO) => ({
+          ...item,
+          id: item.id.toString(),
+          song: (() => {
+            const s: LyricSongDTO = item.song;
+            const base = {
+              id: s.id.toString(),
+              docId: s.docId,
+              title: s.title,
+              year: s.year,
+            };
+            const artists = Array.isArray(s.artists) && s.artists.length > 0
+              ? { artists: s.artists }
+              : {};
+            const lyricists = Array.isArray(s.lyricists) && s.lyricists.length > 0
+              ? { lyricists: s.lyricists }
+              : {};
+            return { ...base, ...artists, ...lyricists };
+          })(),
+          tokens: ((): LyricTokenDTO[] | undefined => {
+            const maybeTokens = item.tokens;
+            if (isLyricTokenDTOArray(maybeTokens)) {
+              return maybeTokens.map((token) => ({
+                position: token.position,
+                text: token.text,
+                pos: token.pos ?? null,
+                syllables: Array.isArray(token.syllables) && token.syllables.length > 0
+                  ? token.syllables.map(mapMatchedSyllable)
+                  : undefined,
+              }));
+            }
+            return undefined;
+          })(),
+          matchedSyllables: ((): MatchedSyllableDTO[] | undefined => {
+            const maybeSyllables = item.matchedSyllables;
+            if (isMatchedSyllableDTOArray(maybeSyllables)) {
+              return maybeSyllables.map((syllable) => ({
+                ...mapMatchedSyllable(syllable),
+              }));
+            }
+            return undefined;
+          })(),
+          syntaxNotes: item.syntaxNotes ?? null,
+        })),
+        fromCache: false,
+        processingTimeMs: Date.now() - startedAt,
+      });
+      const json = JSON.stringify(response);
+      c.header("Content-Type", "application/json; charset=utf-8");
+      return c.body(json);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return c.json({
+          error: { code: "INVALID_REQUEST", message: error.issues },
+        }, 400);
+      }
+      logger.error("lyrics_search_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json({
+        error: {
+          code: "LYRICS_SEARCH_FAILED",
+          message: error instanceof Error ? error.message : "Failed to search lyrics",
+        },
+      }, 500);
+    }
+  });
 
   app.post("/lyrics/generate", async (c) => {
     const startedAt = Date.now();
     try {
       const body = await c.req.json();
       const parsed = LyricGenerateRequestSchema.parse(body);
-      const toneInputs = Array.isArray(parsed.tones)
-        ? parsed.tones
-        : parsed.tones.split(",");
+      const toneInputs = Array.isArray(parsed.tones) ? parsed.tones : parsed.tones.split(",");
       const toneSequences = toneInputs
         .map((seq: string) => seq.trim())
         .filter((seq: string) => seq.length > 0);
@@ -216,130 +412,6 @@ export function registerLyricRoutes(app: Hono, container: Container) {
         error: {
           code: "LYRIC_GENERATION_FAILED",
           message: error instanceof Error ? error.message : "Failed to generate lyrics",
-        },
-      }, 500);
-    }
-  });
-
-  app.post("/lyrics/session", async (c) => {
-    const startedAt = Date.now();
-    try {
-      const parsed = GenerateSessionRequestSchema.parse(await c.req.json());
-      const seed = parsed.seed ?? Math.floor(Math.random() * 1_000_000);
-      const config = mergeConfig(parsed.config);
-      const toneSequences = parsed.toneSequences.map((seq: string) => seq.trim());
-      const sceneIntent = buildSceneIntent(parsed.prompt, parsed.scene);
-
-      let themePlan: LineThemePlan[] = [];
-      try {
-        themePlan = await retrieval.generateStoryThemes(
-          toneSequences.length,
-          sceneIntent,
-          toneSequences,
-        );
-      } catch (themeError) {
-        logger.warning("session_theme_plan_fallback", {
-          error: themeError instanceof Error ? themeError.message : String(themeError),
-        });
-        themePlan = Array.from({ length: toneSequences.length }, (_, idx) => ({
-          primary: `${sceneIntent.title}·${idx + 1}`,
-          subThemes: [],
-        }));
-      }
-
-      const state: SessionState = {
-        sessionId: crypto.randomUUID(),
-        seed,
-        lines: [],
-      };
-      const previousLines: string[] = [];
-
-      for (let i = 0; i < toneSequences.length; i++) {
-        const toneSeq = toneSequences[i];
-        const perLineSeed = deriveLineSeed(seed, toneSeq, i);
-        const overrides = themePlan?.[i];
-        try {
-          const lineResult = await sessionService.runLine(
-            i,
-            toneSeq,
-            sceneIntent,
-            config,
-            previousLines,
-            perLineSeed,
-            overrides?.primary,
-            overrides?.subThemes,
-          );
-          state.lines.push(lineResult);
-          if (lineResult.topSentences?.[0]?.text) {
-            previousLines.push(lineResult.topSentences[0].text);
-          }
-        } catch (lineError) {
-          const reason = lineError instanceof Error ? lineError.message : String(lineError);
-          logger.error("session_line_failed", {
-            lineIndex: i,
-            toneSequence: toneSeq,
-            reason,
-          });
-          state.lines.push({
-            lineIndex: i,
-            toneSequence: toneSeq,
-            digitSet: [],
-            patterns: [],
-            candidatePoolStats: {
-              total: 0,
-              semanticCount: 0,
-              freqTopCount: 0,
-              freqRandomCount: 0,
-            },
-            topSentences: [],
-            topParagraphCandidates: [],
-            allLineCandidates: [],
-            warnings: [],
-            error: reason === LyricErrorCode.ERROR_INVALID_INPUT
-              ? LyricErrorCode.ERROR_INVALID_INPUT
-              : LyricErrorCode.ERROR_GENERATION_FAILED,
-          });
-        }
-      }
-
-      const topN = parsed.top ?? 3;
-      if (topN > 0) {
-        try {
-          const composed = await sessionService.composeParagraphs(
-            state.lines,
-            sceneIntent,
-            config.ranking,
-            topN,
-          );
-          state.topOutputs = composed.paragraphs;
-        } catch (composeError) {
-          logger.warning("session_compose_failed", {
-            error: composeError instanceof Error ? composeError.message : String(composeError),
-          });
-        }
-      }
-
-      const feature = parsed.feature || "lyrics-generation";
-      const payload = toExport(state, feature);
-      const processingTimeMs = Date.now() - startedAt;
-      return c.json({
-        ...payload,
-        meta: { ...payload.meta, processingTimeMs },
-      });
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return c.json({
-          error: { code: "INVALID_REQUEST", message: error.issues },
-        }, 400);
-      }
-      logger.error("session_generation_failed", {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      return c.json({
-        error: {
-          code: "SESSION_GENERATION_FAILED",
-          message: error instanceof Error ? error.message : "Failed to generate lyric session",
         },
       }, 500);
     }

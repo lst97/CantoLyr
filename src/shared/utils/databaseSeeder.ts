@@ -17,6 +17,8 @@ export interface SeedConfig {
   maxRetries: number;
   retryDelayMs: number;
   logProgress: boolean;
+  transactionTimeoutMs: number;
+  transactionMaxWaitMs: number;
 }
 
 /**
@@ -27,6 +29,8 @@ export const DEFAULT_SEED_CONFIG: SeedConfig = {
   maxRetries: 3,
   retryDelayMs: 1000,
   logProgress: true,
+  transactionTimeoutMs: 120000,
+  transactionMaxWaitMs: 60000,
 };
 
 /**
@@ -215,6 +219,9 @@ export class DatabaseSeeder {
           }
 
           return { entries: insertedEntries, readings: insertedReadings };
+        }, {
+          timeout: this.config.transactionTimeoutMs,
+          maxWait: this.config.transactionMaxWaitMs,
         });
       } catch (error) {
         attempt++;

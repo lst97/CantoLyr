@@ -1,9 +1,94 @@
 import { PrismaClient } from "../../../../../prisma/generated/client.ts";
 import type {
+  LyricFilterOptionsDTO,
   LyricLineDTO,
   LyricSearchParams,
   LyricsRepo,
+  LyricTokenDTO,
+  MatchedSyllableDTO,
 } from "../../../../application/ports/LyricsRepo.ts";
+
+const TONE_DIGIT_MAP: Record<number, number> = { 1: 3, 2: 9, 3: 4, 4: 0, 5: 5, 6: 2 };
+const TONE_RAW_PATTERN = /([1-6])$/u;
+const HAN_REGEX = /\p{Script=Han}/u;
+const LETTER_REGEX = /\p{Letter}/u;
+const NUMBER_REGEX = /\p{Number}/u;
+
+function deriveToneValues(
+  jyutping: string,
+  rawValue?: number | null,
+  digitValue?: number | null,
+): { toneRaw: number | null; toneDigit: number | null } {
+  const normalizedJyutping = typeof jyutping === "string" ? jyutping : "";
+  const rawCandidate = typeof rawValue === "number" && Number.isFinite(rawValue) ? rawValue : null;
+
+  if (rawCandidate && rawCandidate >= 1 && rawCandidate <= 6) {
+    const mappedDigit = typeof digitValue === "number" && Number.isFinite(digitValue)
+      ? digitValue
+      : TONE_DIGIT_MAP[rawCandidate] ?? null;
+    return { toneRaw: rawCandidate, toneDigit: mappedDigit ?? null };
+  }
+
+  const matched = TONE_RAW_PATTERN.exec(normalizedJyutping);
+  const derivedRaw = matched ? Number(matched[1]) : null;
+  const mappedDigit = derivedRaw !== null
+    ? TONE_DIGIT_MAP[derivedRaw] ?? null
+    : (typeof digitValue === "number" && Number.isFinite(digitValue) ? digitValue : null);
+
+  return { toneRaw: derivedRaw, toneDigit: mappedDigit ?? null };
+}
+
+function isSyllabicChar(char: string): boolean {
+  return HAN_REGEX.test(char) || LETTER_REGEX.test(char) || NUMBER_REGEX.test(char);
+}
+
+// Map syllables onto tokens in reading order so that multi-character tokens expose
+// all contributing syllables. This relies on the corpus guarantee that every
+// syllabic character (Han, letters, digits) is represented sequentially in the
+// syllable list returned from the database.
+function attachSyllablesToTokens(
+  syllables: MatchedSyllableDTO[],
+  rawTokens: Array<{ position: number; text: string; pos: string | null }>,
+): LyricTokenDTO[] {
+  if (rawTokens.length === 0) return [];
+
+  const total = syllables.length;
+  let cursor = 0;
+
+  const mapped = rawTokens.map((token) => {
+    const graphemes = Array.from(typeof token.text === "string" ? token.text : "");
+    const syllabicCount = graphemes.reduce(
+      (count, char) => count + (isSyllabicChar(char) ? 1 : 0),
+      0,
+    );
+
+    const takeCount = Math.min(Math.max(syllabicCount, 0), Math.max(total - cursor, 0));
+    const assigned = takeCount > 0 ? syllables.slice(cursor, cursor + takeCount) : [];
+    cursor += assigned.length;
+
+    const syllableList = assigned.length > 0 ? assigned : undefined;
+    return {
+      position: token.position,
+      text: token.text,
+      pos: token.pos,
+      syllables: syllableList,
+    } satisfies LyricTokenDTO;
+  });
+
+  if (cursor < total && mapped.length > 0) {
+    const remainder = syllables.slice(cursor);
+    for (let index = mapped.length - 1; index >= 0; index--) {
+      const candidate = mapped[index];
+      const existing = Array.isArray(candidate.syllables) ? candidate.syllables : [];
+      if (existing.length > 0 || index === 0) {
+        candidate.syllables = [...existing, ...remainder];
+        break;
+      }
+    }
+  }
+
+  return mapped;
+}
 
 /**
  * Prisma implementation for Lyrics read operations (CQRS read side)
@@ -15,18 +100,34 @@ export class LyricsReadRepository implements LyricsRepo {
     const {
       pronunciation,
       pronunciationPosition,
+      rhyme,
+      rhymePosition,
       themes,
       keywords,
       limit = 50,
       offset = 0,
     } = params;
 
-    const where = this.buildWhereClause(params);
+    const rhymeContext = this.buildRhymeContext(rhyme, rhymePosition);
+    const where = this.buildWhereClause(params, rhymeContext?.clause);
 
-    const rows = await (this.prisma as any).lyricLine.findMany({
+    const rows = await this.prisma.lyricLine.findMany({
       where,
       include: {
-        song: { select: { id: true, docId: true, title: true, year: true } },
+        song: {
+          select: {
+            id: true,
+            docId: true,
+            title: true,
+            year: true,
+            artists: {
+              include: { artist: { select: { name: true } } },
+            },
+            lyricists: {
+              include: { lyricist: { select: { name: true } } },
+            },
+          },
+        },
         toneNgrams: pronunciation
           ? {
             where: {
@@ -38,50 +139,168 @@ export class LyricsReadRepository implements LyricsRepo {
           }
           : false,
         themes: themes?.length ? { include: { theme: true } } : false,
-      keywords: keywords?.length ? { include: { keyword: true } } : false,
+        keywords: keywords?.length ? { include: { keyword: true } } : false,
+        tokens: {
+          orderBy: { position: "asc" },
+          select: { position: true, text: true, pos: true },
+        },
+        syllables: {
+          orderBy: { position: "asc" },
+          select: {
+            position: true,
+            jyutping: true,
+            jyutpingNormalized: true,
+            consonant: true,
+            rhyme: true,
+            toneRaw: true,
+            toneDigit: true,
+          },
+        },
       },
       orderBy: [{ songId: "asc" }, { lineIndex: "asc" }],
       take: limit,
       skip: offset,
     });
 
-    return rows.map((r: any) => ({
-      id: r.id,
-      lyricId: r.lyricId,
-      song: r.song,
-      text: r.text,
-      lineIndex: r.lineIndex,
-      charCount: r.charCount,
-      syllableCount: r.syllableCount,
-      tokenCount: r.tokenCount,
-      tonePatternText: r.tonePatternText,
-      pronunciationBigrams: Array.isArray(r.toneNgrams)
-        ? r.toneNgrams.map((t: any) => ({
-          value: t.value,
-          position: t.position,
-        }))
-        : undefined,
-      sentiment: r.sentiment,
-      themes: Array.isArray(r.themes) ? r.themes.map((t: any) => t.theme.name) : undefined,
-      keywords: Array.isArray(r.keywords) ? r.keywords.map((k: any) => k.keyword.word) : undefined,
-    }));
-  }
+    return rows.map((r) => {
+      const allSyllablesRaw = Array.isArray(r.syllables) ? r.syllables : [];
+      const allSyllables: MatchedSyllableDTO[] = allSyllablesRaw.map((s) => {
+        const { toneRaw, toneDigit } = deriveToneValues(s.jyutping, s.toneRaw, s.toneDigit);
+        return {
+          position: s.position,
+          jyutping: s.jyutping,
+          jyutpingNormalized: s.jyutpingNormalized ?? null,
+          consonant: s.consonant ?? null,
+          rhyme: s.rhyme ?? null,
+          toneRaw,
+          toneDigit,
+        } satisfies MatchedSyllableDTO;
+      });
+      const matchedSyllables = rhymeContext
+        ? allSyllables.filter((s) => {
+          const key = (s.rhyme ?? s.jyutpingNormalized ?? "").toLowerCase();
+          if (!key || !rhymeContext.targets.has(key)) {
+            return false;
+          }
+          if (
+            typeof rhymeContext.position === "number" &&
+            s.position !== rhymeContext.position
+          ) {
+            return false;
+          }
+          return true;
+        })
+        : undefined;
+      const tokens: LyricTokenDTO[] | undefined = Array.isArray(r.tokens)
+        ? attachSyllablesToTokens(
+          allSyllables,
+          r.tokens.map((t) => ({
+            position: t.position,
+            text: t.text,
+            pos: t.pos ?? null,
+          })),
+        )
+        : undefined;
+      const syntaxNotesRaw = typeof r.syntaxNotes === "string" ? r.syntaxNotes.trim() : null;
+      const syntaxNotes = syntaxNotesRaw && syntaxNotesRaw.length > 0 ? syntaxNotesRaw : null;
 
+      return {
+        id: r.id,
+        lyricId: r.lyricId,
+        song: {
+          id: r.song.id,
+          docId: r.song.docId,
+          title: r.song.title,
+          year: r.song.year,
+          artists: Array.isArray(r.song.artists)
+            ? r.song.artists
+              .map((entry) => entry?.artist?.name)
+              .filter((name): name is string => Boolean(name))
+            : undefined,
+          lyricists: Array.isArray(r.song.lyricists)
+            ? r.song.lyricists
+              .map((entry) => entry?.lyricist?.name)
+              .filter((name): name is string => Boolean(name))
+            : undefined,
+        },
+        text: r.text,
+        lineIndex: r.lineIndex,
+        charCount: r.charCount,
+        syllableCount: r.syllableCount,
+        tokenCount: r.tokenCount,
+        tonePatternText: r.tonePatternText,
+        pronunciationBigrams: Array.isArray(r.toneNgrams)
+          ? r.toneNgrams.map((t) => ({
+            value: t.value,
+            position: t.position,
+          }))
+          : undefined,
+        tokens,
+        syntaxNotes,
+        matchedSyllables: matchedSyllables && matchedSyllables.length > 0
+          ? matchedSyllables
+          : undefined,
+        sentiment: r.sentiment,
+        themes: Array.isArray(r.themes) ? r.themes.map((t) => t.theme.name) : undefined,
+        keywords: Array.isArray(r.keywords) ? r.keywords.map((k) => k.keyword.word) : undefined,
+      } satisfies LyricLineDTO;
+    });
+  }
   async countLyricLines(
     params: Omit<LyricSearchParams, "limit" | "offset">,
   ): Promise<number> {
-    const where = this.buildWhereClause(params);
-    return await (this.prisma as any).lyricLine.count({ where });
+    const rhymeContext = this.buildRhymeContext(params.rhyme, params.rhymePosition);
+    const where = this.buildWhereClause(params, rhymeContext?.clause);
+    return await this.prisma.lyricLine.count({ where });
   }
 
-  private buildWhereClause(params: LyricSearchParams): any {
+  async getLyricFilterOptions(): Promise<LyricFilterOptionsDTO> {
+    const [themeRows, keywordRows, lyricistRows, artistRows, songRows, sentimentRows] =
+      await Promise.all([
+        this.prisma.theme.findMany({ select: { name: true } }),
+        this.prisma.keyword.findMany({ select: { word: true } }),
+        this.prisma.lyricist.findMany({ select: { name: true } }),
+        this.prisma.artist.findMany({ select: { name: true } }),
+        this.prisma.song.findMany({ select: { year: true } }),
+        this.prisma.lyricLine.findMany({ select: { sentiment: true } }),
+      ]);
+
+    const toSortedUniqueStrings = (values: Array<string | null | undefined>): string[] =>
+      Array.from(
+        new Set(
+          values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)),
+        ),
+      ).sort((a, b) => a.localeCompare(b));
+
+    const themes = toSortedUniqueStrings(themeRows.map((row) => row.name));
+    const keywords = toSortedUniqueStrings(keywordRows.map((row) => row.word));
+    const lyricists = toSortedUniqueStrings(lyricistRows.map((row) => row.name));
+    const artists = toSortedUniqueStrings(artistRows.map((row) => row.name));
+
+    const years = Array.from(
+      new Set(
+        songRows
+          .map((row) => row.year)
+          .filter((year): year is number => typeof year === "number" && Number.isFinite(year)),
+      ),
+    ).sort((a, b) => a - b);
+
+    const sentiments = toSortedUniqueStrings(
+      sentimentRows.map((row: { sentiment: string | null }) => row.sentiment),
+    );
+
+    return { themes, keywords, lyricists, artists, years, sentiments };
+  }
+
+  private buildWhereClause(
+    params: LyricSearchParams,
+    syllableClause?: Record<string, unknown>,
+  ): Record<string, unknown> | undefined {
     const {
       limit: _limit,
       offset: _offset,
       pronunciation,
       pronunciationPosition,
-      rhyme,
-      rhymePosition,
       themes,
       keywords,
       lyricist,
@@ -91,7 +310,7 @@ export class LyricsReadRepository implements LyricsRepo {
       year,
     } = params;
 
-    const and: any[] = [];
+    const and: Array<Record<string, unknown>> = [];
     if (id) and.push({ lyricId: id });
     if (sentiment) and.push({ sentiment });
 
@@ -114,15 +333,8 @@ export class LyricsReadRepository implements LyricsRepo {
       });
     }
 
-    if (rhyme) {
-      and.push({
-        syllables: {
-          some: {
-            rhyme,
-            ...(rhymePosition ? { position: rhymePosition } : {}),
-          },
-        },
-      });
+    if (syllableClause) {
+      and.push({ syllables: { some: syllableClause } });
     }
 
     if (artist) {
@@ -138,5 +350,40 @@ export class LyricsReadRepository implements LyricsRepo {
     }
 
     return and.length ? { AND: and } : undefined;
+  }
+
+  private buildRhymeContext(
+    rhyme?: string,
+    rhymePosition?: number,
+  ): { clause: Record<string, unknown>; targets: Set<string>; position?: number } | undefined {
+    if (!rhyme) {
+      return undefined;
+    }
+    const normalizedInput = rhyme.trim().toLowerCase();
+    if (normalizedInput.length === 0) {
+      return undefined;
+    }
+
+    const withoutTone = normalizedInput.replace(/\d+$/u, "");
+    const targets = new Set<string>();
+    targets.add(normalizedInput);
+    if (withoutTone.length > 0) {
+      targets.add(withoutTone);
+    }
+
+    const clause: Record<string, unknown> = {};
+    if (typeof rhymePosition === "number") {
+      clause.position = rhymePosition;
+    }
+    clause.OR = Array.from(targets).flatMap((target) => [
+      { rhyme: target },
+      { jyutpingNormalized: target },
+    ]);
+
+    return {
+      clause,
+      targets,
+      position: typeof rhymePosition === "number" ? rhymePosition : undefined,
+    };
   }
 }

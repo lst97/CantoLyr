@@ -9,14 +9,8 @@ import {
   SearchResponseSchema,
   SearchRhymeQuerySchema,
 } from "../schemas.ts";
-import type {
-  ReadingDTO,
-  ReadingRepo,
-} from "../../../../application/ports/ReadingRepo.ts";
-import type {
-  LyricLineDTO,
-  LyricsRepo,
-} from "../../../../application/ports/LyricsRepo.ts";
+import type { ReadingDTO, ReadingRepo } from "../../../../application/ports/ReadingRepo.ts";
+import type { LyricLineDTO, LyricsRepo } from "../../../../application/ports/LyricsRepo.ts";
 import type { EntryType } from "../../../../shared/types/common.ts";
 import RetrievalService from "../../../../application/lyric/RetrievalService.ts";
 

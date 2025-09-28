@@ -1,4 +1,4 @@
-export type { EntryType, PartOfSpeech, Register } from "./common.js";
+export type { EntryType, PartOfSpeech, Register } from "./common.ts";
 export type {
   NormalizedEntry,
   NormalizedReading,
@@ -6,4 +6,4 @@ export type {
   ParseStats,
   RawEntry,
   RawReading,
-} from "./data.js";
+} from "./data.ts";

@@ -283,9 +283,7 @@ export class RetrievalService {
     for (let i = 0; i < metadatas.length; i++) {
       if (matches.length >= limit) break;
       const md = metadatas[i] ?? {};
-      const surface = typeof md.surface === "string"
-        ? md.surface.trim()
-        : "";
+      const surface = typeof md.surface === "string" ? md.surface.trim() : "";
       if (!surface) continue;
       const mdPron = typeof md.pronunciation === "string"
         ? md.pronunciation.trim()
@@ -338,15 +336,9 @@ export class RetrievalService {
         syllables,
         freq,
         pos: typeof md.pos === "string" && md.pos ? String(md.pos) : undefined,
-        register: typeof md.register === "string" && md.register
-          ? String(md.register)
-          : undefined,
-        gloss: typeof md.gloss === "string" && md.gloss
-          ? String(md.gloss)
-          : undefined,
-        source: typeof md.source === "string" && md.source
-          ? String(md.source)
-          : undefined,
+        register: typeof md.register === "string" && md.register ? String(md.register) : undefined,
+        gloss: typeof md.gloss === "string" && md.gloss ? String(md.gloss) : undefined,
+        source: typeof md.source === "string" && md.source ? String(md.source) : undefined,
         similarity,
       };
       matches.push(match);

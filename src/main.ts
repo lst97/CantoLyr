@@ -52,22 +52,6 @@ async function main() {
     return c.json(health, isHealthy ? 200 : 503);
   });
 
-  // Search Endpoint
-  app.post("/search", async (c) => {
-    const searchUseCase = container.resolve("searchUseCase");
-    const body = await c.req.json();
-    const result = await searchUseCase.execute(body);
-    return c.json(result);
-  });
-
-  // Compose Endpoint
-  app.post("/compose", async (c) => {
-    const composeUseCase = container.resolve("composeLineUseCase");
-    const body = await c.req.json();
-    const result = await composeUseCase.execute(body);
-    return c.json(result);
-  });
-
   // Feedback Endpoint
   app.post("/feedback", async (c) => {
     const feedbackUseCase = container.resolve("recordFeedbackUseCase");

@@ -227,6 +227,7 @@ model Syllable {
   lyric     LyricLine  @relation(fields: [lyricId], references: [id], onDelete: Cascade)
   position  Int
   jyutping  String
+  jyutpingNormalized String?
   consonant String?
   rhyme     String?
   toneRaw   Int?
@@ -235,6 +236,7 @@ model Syllable {
 
   @@index([lyricId, position])
   @@index([rhyme])
+  @@index([jyutpingNormalized])
   @@index([toneDigit])
   @@map("syllables")
 }
