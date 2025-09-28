@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 export function parseConcatenatedJsonObjects(raw: string): any[] {
   const objs: string[] = [];
   let depth = 0, inStr = false, esc = false, start = -1;
@@ -37,7 +35,7 @@ export function loadCharDetail(filePath: string): Map<string, string> {
     char: string;
     pronunciations?: Array<{ explanations?: Array<{ content?: string }> }>;
   };
-  const raw = readFileSync(filePath, "utf-8");
+  const raw = new TextDecoder().decode(Deno.readFileSync(filePath));
   let items: CharDetailItem[] = [];
   try {
     const parsed = JSON.parse(raw);
@@ -63,7 +61,7 @@ export function loadCharDetail(filePath: string): Map<string, string> {
 
 export function loadWordDetail(filePath: string): Map<string, string> {
   type WordDetailItem = { word: string; explanation?: string };
-  const raw = readFileSync(filePath, "utf-8");
+  const raw = new TextDecoder().decode(Deno.readFileSync(filePath));
   let items: WordDetailItem[] = [];
   try {
     const parsed = JSON.parse(raw);
@@ -82,7 +80,7 @@ export function loadWordDetail(filePath: string): Map<string, string> {
 
 export function loadCharFrequency(filePath: string): Map<string, number> {
   type CharFreqItem = { [k: string]: any };
-  const raw = readFileSync(filePath, "utf-8");
+  const raw = new TextDecoder().decode(Deno.readFileSync(filePath));
   let items: CharFreqItem[] = [];
   try {
     const parsed = JSON.parse(raw);
@@ -115,7 +113,7 @@ export function loadCharFrequency(filePath: string): Map<string, number> {
 
 // Parse word raw counts and convert to per-million frequencies.
 export function loadWordFreqPerMillion(filePath: string): Map<string, number> {
-  const raw = readFileSync(filePath, "utf-8");
+  const raw = new TextDecoder().decode(Deno.readFileSync(filePath));
   const lines = raw.split(/\r?\n/);
   const pairs: Array<{ w: string; c: number }> = [];
 
@@ -179,7 +177,7 @@ export function loadWordFreqPerMillion(filePath: string): Map<string, number> {
 }
 
 export function loadCoarseSentimentMap(filePath: string): Map<string, string> {
-  const raw = readFileSync(filePath, "utf-8");
+  const raw = new TextDecoder().decode(Deno.readFileSync(filePath));
   const map = new Map<string, string>();
   try {
     const obj = JSON.parse(raw) as Record<string, any>;
@@ -202,7 +200,7 @@ export function loadCoarseSentimentMap(filePath: string): Map<string, string> {
 export function loadDetailedSentimentMaps(
   filePath: string,
 ): { regMap: Map<string, string>; posMap: Map<string, string> } {
-  const raw = readFileSync(filePath, "utf-8");
+  const raw = new TextDecoder().decode(Deno.readFileSync(filePath));
   const regMap = new Map<string, string>();
   const posMap = new Map<string, string>();
   try {

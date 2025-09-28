@@ -1,5 +1,5 @@
 import { basename, dirname, join, resolve } from "jsr:@std/path";
-import * as OpenCC from "opencc-js";
+import { OpenCC } from "opencc";
 import { getLogger } from "jsr:@std/log";
 
 const logger = getLogger();
@@ -8,9 +8,9 @@ async function convertFile(inputPath: string, outputPath?: string) {
   const absIn = resolve(inputPath);
   const raw = await Deno.readTextFile(absIn);
 
-  // Initialize the converter for Simplified Chinese to Traditional Chinese (s2t.json).
-  const converter = OpenCC.Converter({ from: "cn", to: "hk" });
-  const converted = converter(raw);
+  // Initialize the converter for Simplified Chinese to Traditional Chinese (s2hk.json).
+  const converter = new OpenCC("s2hk.json");
+  const converted = await converter.convertPromise(raw);
 
   const outPath = outputPath
     ? resolve(outputPath)

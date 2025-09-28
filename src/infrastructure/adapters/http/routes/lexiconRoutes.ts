@@ -51,9 +51,7 @@ export function registerSearchRoutes(app: Hono, container: Container) {
         fromCache: false,
         processingTimeMs: Date.now() - startTime,
       });
-      const json = JSON.stringify(payload);
-      c.header("Content-Type", "application/json; charset=utf-8");
-      return c.body(json);
+      return c.json(payload);
     } catch (error) {
       const message = error instanceof ZodError
         ? error.issues
@@ -100,10 +98,7 @@ export function registerSearchRoutes(app: Hono, container: Container) {
         fromCache: false,
         processingTimeMs: Date.now() - startTime,
       });
-      // Explicitly set UTF-8 to avoid any client-side charset misinterpretation
-      const json = JSON.stringify(payload);
-      c.header("Content-Type", "application/json; charset=utf-8");
-      return c.body(json);
+      return c.json(payload);
     } catch (error) {
       const message = error instanceof ZodError
         ? error.issues
@@ -147,9 +142,7 @@ export function registerSearchRoutes(app: Hono, container: Container) {
         fromCache: false,
         processingTimeMs: Date.now() - startTime,
       });
-      const json = JSON.stringify(payload);
-      c.header("Content-Type", "application/json; charset=utf-8");
-      return c.body(json);
+      return c.json(payload);
     } catch (error) {
       const message = error instanceof ZodError
         ? error.issues
@@ -224,9 +217,7 @@ export function registerSearchRoutes(app: Hono, container: Container) {
         fromCache: false,
         processingTimeMs: Date.now() - startTime,
       });
-      const json = JSON.stringify(payload);
-      c.header("Content-Type", "application/json; charset=utf-8");
-      return c.body(json);
+      return c.json(payload);
     } catch (error) {
       const message = error instanceof ZodError
         ? error.issues
@@ -300,9 +291,7 @@ export function registerSearchRoutes(app: Hono, container: Container) {
         fromCache: false,
         processingTimeMs: Date.now() - startTime,
       });
-      const json = JSON.stringify(payload);
-      c.header("Content-Type", "application/json; charset=utf-8");
-      return c.body(json);
+      return c.json(payload);
     } catch (error) {
       const message = error instanceof ZodError
         ? error.issues

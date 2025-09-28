@@ -824,7 +824,7 @@ async function populateMainDatabase() {
   logger.info("🚀 Starting main database population...");
 
   const databaseUrl = Deno.env.get("DATABASE_URL");
-  logger.info(databaseUrl);
+  logger.info("Database URL configured");
   if (!databaseUrl) {
     throw new Error("DATABASE_URL environment variable is not set");
   }

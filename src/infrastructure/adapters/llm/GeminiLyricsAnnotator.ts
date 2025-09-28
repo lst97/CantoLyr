@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "npm:@google/genai";
 import { z } from "zod";
 import type {
   LyricsAnnotator,
@@ -153,61 +153,16 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
     ].join("\n");
   }
 
-  private generateContent(prompt: string, model?: string) {
+  private async generateContent(prompt: string, model?: string) {
     const modelToUse = model || this.config.model || "gemini-2.5-flash";
     const timeoutMs = this.config.timeoutMs || 600000;
 
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(
-        () =>
-          reject(
-            new Error(`Gemini API request timed out after ${timeoutMs}ms`),
-          ),
-        timeoutMs,
-      );
+    let timeoutId: number | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`Gemini API request timed out after ${timeoutMs}ms`));
+      }, timeoutMs) as unknown as number;
     });
-
-    const annotationSchema = {
-      type: "object",
-      properties: {
-        songGenre: {
-          type: "array",
-          items: { type: "string" },
-        },
-        lines: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              semantics: {
-                type: "object",
-                properties: {
-                  themes: { type: "array", items: { type: "string" } },
-                  sentiment: { type: "string" },
-                  keywords: { type: "array", items: { type: "string" } },
-                },
-                required: ["themes", "sentiment", "keywords"],
-              },
-              tokens: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    text: { type: "string" },
-                    pos: { type: "string" },
-                  },
-                  required: ["text", "pos"],
-                },
-              },
-              syntax_notes: { type: "string" },
-            },
-            required: ["id", "semantics", "tokens", "syntax_notes"],
-          },
-        },
-      },
-      required: ["songGenre", "lines"],
-    };
 
     const generationPromise = this.genAI.models.generateContent({
       model: modelToUse,
@@ -219,12 +174,18 @@ export class GeminiLyricsAnnotator implements LyricsAnnotator {
         maxOutputTokens: 20480,
         responseModalities: ["TEXT"],
         responseMimeType: "application/json",
-        responseJsonSchema: annotationSchema,
+        // responseJsonSchema handled elsewhere
         thinkingConfig: { thinkingBudget: 0 },
       },
     });
 
-    return Promise.race([generationPromise, timeoutPromise]);
+    try {
+      return await Promise.race([generationPromise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId as unknown as number);
+      }
+    }
   }
 
   private isRateLimitError(err: any): boolean {

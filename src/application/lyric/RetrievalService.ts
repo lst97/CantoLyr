@@ -7,7 +7,7 @@
 import { LyricErrorCode, LyricWarningCode } from "../../shared/lyric-codes.ts";
 import { ChromaClient } from "chromadb";
 import { pipeline } from "@huggingface/transformers";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "npm:@google/genai";
 import { isAbsolute, join, normalize } from "jsr:@std/path";
 import { PrismaClient } from "../../../prisma/generated/client.ts";
 import { PatternSlot, SegmentationPattern } from "../../domain/lyric/entities.ts";

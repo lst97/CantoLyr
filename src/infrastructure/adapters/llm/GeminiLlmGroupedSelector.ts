@@ -139,18 +139,17 @@ export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
     }
   }
 
-  private generateContent(prompt: string) {
+  private async generateContent(prompt: string) {
     const model = this.config.model || "gemini-2.5-flash";
-
-    // Create a timeout promise if timeout is configured
     const timeoutMs = this.config.timeoutMs || 600000;
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
+
+    let timeoutId: number | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
         reject(new Error(`Gemini API request timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
+      }, timeoutMs) as unknown as number;
     });
 
-    // Create the generation promise
     const generationPromise = this.genAI.models.generateContent({
       model,
       contents: prompt,
@@ -160,14 +159,16 @@ export class GeminiLlmGroupedSelector implements LlmGroupedSelector {
         topP: 0.95,
         maxOutputTokens: 20480,
         responseModalities: ["TEXT"],
-        // Ask SDK to treat output as JSON and help enforce structure
         responseMimeType: "application/json",
         responseJsonSchema: groupedSelectionResponseSchema,
       },
     });
 
-    // Race between generation and timeout
-    return Promise.race([generationPromise, timeoutPromise]);
+    try {
+      return await Promise.race([generationPromise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId as unknown as number);
+    }
   }
 
   /**

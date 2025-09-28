@@ -40,12 +40,16 @@
     "indentWidth": 2,
     "singleQuote": false
   },
+  "check": {
+    "include": ["src/**/*", "scripts/**/*", "prisma/**/*"],
+    "exclude": ["dist/**/*", "node_modules/**/*"]
+  },
   "imports": {
     "chromadb": "npm:chromadb@^3.0.15",
     "zod": "npm:zod@^4.1.11",
     "@huggingface/transformers": "npm:@huggingface/transformers@^3.7.3",
-    "opencc-js": "npm:opencc-js@^1.0.5",
     "ajv": "npm:ajv@^8.17.1",
-    "@google/genai": "npm:@google/genai@^1.20.0"
+    "@google/genai": "npm:@google/genai@^1.20.0",
+    "opencc": "npm:opencc@^1.1.8"
   }
 }

@@ -2,8 +2,7 @@
  * JSONL parser for streaming large files and normalizing entries
  */
 
-import { createReadStream } from "node:fs";
-import { createInterface } from "node:readline";
+import { TextLineStream } from "jsr:@std/streams/text-line-stream";
 import { z } from "zod";
 import { ToneMap } from "../../domain/value-objects/ToneMap.ts";
 import { countSyllables, extractTones, isValidJyutping, normalizeJyutping } from "./jyutping.ts";
@@ -54,23 +53,28 @@ export class JsonlParser {
    * @yields ParseResult for each line
    */
   async *parseFile(filePath: string): AsyncGenerator<ParseResult> {
-    const fileStream = createReadStream(filePath, { encoding: "utf8" });
-    const rl = createInterface({
-      input: fileStream,
-      crlfDelay: Infinity,
-    });
+    const file = await Deno.open(filePath);
+    const lines = file.readable
+      .pipeThrough(new TextDecoderStream())
+      .pipeThrough(new TextLineStream());
 
+    const reader = lines.getReader();
     let lineNumber = 0;
+    let done = false;
 
-    for await (const line of rl) {
-      lineNumber++;
+    while (!done) {
+      const { value: line, done: d } = await reader.read();
+      done = d;
+      if (line !== undefined) {
+        lineNumber++;
 
-      // Skip empty lines
-      if (line.trim() === "") {
-        continue;
+        // Skip empty lines
+        if (line.trim() === "") {
+          continue;
+        }
+
+        yield this.parseLine(line, lineNumber);
       }
-
-      yield this.parseLine(line, lineNumber);
     }
   }
 

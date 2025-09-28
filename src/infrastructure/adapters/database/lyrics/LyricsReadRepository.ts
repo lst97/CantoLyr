@@ -138,8 +138,8 @@ export class LyricsReadRepository implements LyricsRepo {
             select: { value: true, position: true },
           }
           : false,
-        themes: themes?.length ? { include: { theme: true } } : false,
-        keywords: keywords?.length ? { include: { keyword: true } } : false,
+        themes: themes?.length ? { select: { theme: { select: { name: true } } } } : false,
+        keywords: keywords?.length ? { select: { keyword: { select: { word: true } } } } : false,
         tokens: {
           orderBy: { position: "asc" },
           select: { position: true, text: true, pos: true },
@@ -241,8 +241,10 @@ export class LyricsReadRepository implements LyricsRepo {
           ? matchedSyllables
           : undefined,
         sentiment: r.sentiment,
-        themes: Array.isArray(r.themes) ? r.themes.map((t) => t.theme.name) : undefined,
-        keywords: Array.isArray(r.keywords) ? r.keywords.map((k) => k.keyword.word) : undefined,
+        themes: Array.isArray(r.themes) ? r.themes.map((t: any) => t.theme.name) : undefined,
+        keywords: Array.isArray(r.keywords)
+          ? r.keywords.map((k: any) => k.keyword.word)
+          : undefined,
       } satisfies LyricLineDTO;
     });
   }

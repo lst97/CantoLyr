@@ -1,4 +1,4 @@
-import { PrismaClient } from "../../../../../prisma/generated/client.ts";
+import { Prisma, PrismaClient } from "../../../../../prisma/generated/client.ts";
 import type {
   FeedbackRecord,
   SelectionInput,
@@ -20,7 +20,7 @@ export class LexiconWriteRepository implements WriteRepo {
         readingId,
         accepted,
         sessionId: sessionId || null,
-        ...(context !== undefined ? { context } : {}),
+        context: context ?? Prisma.JsonNull,
         createdAt: timestamp,
       },
     });

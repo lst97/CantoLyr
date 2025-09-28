@@ -7,6 +7,12 @@ import { requestLogger } from "./infrastructure/adapters/http/middleware/request
 import { Logger } from "./infrastructure/logging/Logger.ts";
 import { getLogger } from "jsr:@std/log";
 
+declare module "hono" {
+  interface ContextVariableMap {
+    reqId: string;
+  }
+}
+
 const logger = getLogger();
 
 async function main() {
@@ -23,9 +29,7 @@ async function main() {
   app.use("*", requestLogger());
   app.onError((err, c) => {
     const httpLogger = Logger.for("http");
-    const reqId = (c as unknown as { get?: (k: string) => unknown }).get?.(
-      "reqId",
-    ) as string | undefined;
+    const reqId = c.get("reqId") as string | undefined;
     httpLogger.error("unhandled_http_error", {
       path: c.req.path,
       method: c.req.method,
@@ -63,9 +67,7 @@ async function main() {
   // 404 handler
   app.notFound((c) => {
     const httpLogger = Logger.for("http");
-    const reqId = (c as unknown as { get?: (k: string) => unknown }).get?.(
-      "reqId",
-    ) as string | undefined;
+    const reqId = c.get("reqId") as string | undefined;
     httpLogger.warning("http_404", {
       method: c.req.method,
       path: c.req.path,

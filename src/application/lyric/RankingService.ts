@@ -2,7 +2,7 @@
 // Selects top K (defaults to 3) sentences using MMR for diversity.
 
 import { selectWithMMR } from "../../domain/lyric/ranking/mmr.ts";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "npm:@google/genai";
 
 export interface RankingConfig {
   topKSize: number;

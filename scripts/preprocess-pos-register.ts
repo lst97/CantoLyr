@@ -14,20 +14,9 @@
  * Requires env: GEMINI_API_KEY
  */
 
-import {
-  createReadStream,
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
-import { once } from "node:events";
-import { createInterface } from "node:readline";
-import { basename, dirname, extname, join, resolve } from "node:path";
-import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from "@google/genai";
-import process from "node:process";
+import { basename, dirname, extname, join, resolve } from "jsr:@std/path";
+import { TextLineStream } from "jsr:@std/streams/text-line-stream";
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from "npm:@google/genai";
 
 // Minimal logger (avoid external deps)
 const logger = {
@@ -36,11 +25,20 @@ const logger = {
   error: (...args: any[]) => console.error(...args),
 };
 
+function existsSync(path: string): boolean {
+  try {
+    Deno.statSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function loadEnvFromDotenv() {
   try {
     const p = resolve(".env");
     if (!existsSync(p)) return;
-    const raw = readFileSync(p, "utf-8");
+    const raw = new TextDecoder().decode(Deno.readFileSync(p));
     for (const line of raw.split(/\r?\n/)) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
@@ -52,7 +50,7 @@ function loadEnvFromDotenv() {
         Deno.env.set(key, value);
       } catch { /* ignore outside Deno */ }
       try {
-        (process.env as any)[key] = value;
+        Deno.env.set(key, value);
       } catch { /* ignore */ }
     }
   } catch {
@@ -111,7 +109,7 @@ type CacheFormat = {
 
 function loadCache(cachePath: string): CacheFormat {
   try {
-    const raw = readFileSync(cachePath, "utf-8");
+    const raw = new TextDecoder().decode(Deno.readFileSync(cachePath));
     const parsed = JSON.parse(raw) as CacheFormat;
     if (!parsed || typeof parsed !== "object" || !parsed.data) {
       throw new Error("invalid cache");
@@ -124,9 +122,9 @@ function loadCache(cachePath: string): CacheFormat {
 
 function saveCache(cachePath: string, cache: CacheFormat): void {
   const dir = dirname(cachePath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  if (!existsSync(dir)) Deno.mkdirSync(dir, { recursive: true });
   cache.updatedAt = new Date().toISOString();
-  writeFileSync(cachePath, JSON.stringify(cache, null, 2), "utf-8");
+  Deno.writeFileSync(cachePath, new TextEncoder().encode(JSON.stringify(cache, null, 2)));
 }
 
 function uniq<T>(arr: T[]): T[] {
@@ -366,74 +364,88 @@ async function rewriteFileWithPOSRegister(
   const finalOut = join(outDir, baseName);
   const tmpOut = finalOut + ".tmp";
 
-  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+  if (!existsSync(outDir)) Deno.mkdirSync(outDir, { recursive: true });
 
-  const rl = createInterface({
-    input: createReadStream(inputPath, { encoding: "utf-8" }),
-    crlfDelay: Infinity,
-  });
-  const out = createWriteStream(tmpOut, { encoding: "utf-8" });
+  const file = await Deno.open(inputPath);
+  const lines = file.readable
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new TextLineStream());
+  const outFile = await Deno.create(tmpOut);
+  const writer = outFile.writable.getWriter();
+  const encoder = new TextEncoder();
 
   let count = 0, touched = 0;
-  for await (const line of rl) {
-    const t = line.trim();
-    if (!t) continue;
-    let obj: AnyRecord | null = null;
-    try {
-      obj = JSON.parse(t);
-    } catch {
-      continue;
-    }
-    if (!obj) {
-      continue;
-    }
-    count++;
-    const surface = String(obj?.surface ?? "");
-    if (surface && cache.data[surface]) {
-      const { pos, register } = cache.data[surface];
-      if (Array.isArray(obj.readings)) {
-        obj.readings = obj.readings.map((r: AnyRecord) => ({
-          ...r,
-          pos: String(pos || r?.pos || "X").toUpperCase(),
-          register: String(register || r?.register || "NEUTRAL").toUpperCase(),
-        }));
-        touched++;
-      } else {
-        // If no readings array, add/override top-level fields safely
-        if (surface) {
-          obj.pos = String(pos || obj.pos || "X").toUpperCase();
-          obj.register = String(register || obj.register || "NEUTRAL")
-            .toUpperCase();
+  const reader = lines.getReader();
+  let done = false;
+  while (!done) {
+    const { value: line, done: d } = await reader.read();
+    done = d;
+    if (line !== undefined) {
+      const t = line.trim();
+      if (!t) continue;
+      let obj: AnyRecord | null = null;
+      try {
+        obj = JSON.parse(t);
+      } catch {
+        continue;
+      }
+      if (!obj) {
+        continue;
+      }
+      count++;
+      const surface = String(obj?.surface ?? "");
+      if (surface && cache.data[surface]) {
+        const { pos, register } = cache.data[surface];
+        if (Array.isArray(obj.readings)) {
+          obj.readings = obj.readings.map((r: AnyRecord) => ({
+            ...r,
+            pos: String(pos || r?.pos || "X").toUpperCase(),
+            register: String(register || r?.register || "NEUTRAL").toUpperCase(),
+          }));
           touched++;
+        } else {
+          // If no readings array, add/override top-level fields safely
+          if (surface) {
+            obj.pos = String(pos || obj.pos || "X").toUpperCase();
+            obj.register = String(register || obj.register || "NEUTRAL")
+              .toUpperCase();
+            touched++;
+          }
         }
       }
+      await writer.write(encoder.encode(JSON.stringify(obj) + "\n"));
+      logger.info(`Processed ${count} lines, updated ${touched} so far...`);
     }
-    out.write(JSON.stringify(obj) + "\n");
-    logger.info(`Processed ${count} lines, updated ${touched} so far...`);
   }
-  out.end();
-  await once(out, "close");
+  await writer.close();
+  await outFile.close();
 
-  renameSync(tmpOut, finalOut);
+  Deno.renameSync(tmpOut, finalOut);
   logger.info(`✅ Wrote ${finalOut} (records: ${count}, updated: ${touched})`);
   return finalOut;
 }
 
 async function listSurfacesFromJsonl(inputPath: string): Promise<string[]> {
   const surfaces: string[] = [];
-  const rl = createInterface({
-    input: createReadStream(inputPath, { encoding: "utf-8" }),
-    crlfDelay: Infinity,
-  });
-  for await (const line of rl) {
-    const t = line.trim();
-    if (!t) continue;
-    try {
-      const obj = JSON.parse(t) as AnyRecord;
-      const s = obj?.surface;
-      if (typeof s === "string" && s) surfaces.push(s);
-    } catch {
-      // skip invalid line
+  const file = await Deno.open(inputPath);
+  const lines = file.readable
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new TextLineStream());
+  const reader = lines.getReader();
+  let done = false;
+  while (!done) {
+    const { value: line, done: d } = await reader.read();
+    done = d;
+    if (line !== undefined) {
+      const t = line.trim();
+      if (!t) continue;
+      try {
+        const obj = JSON.parse(t) as AnyRecord;
+        const s = obj?.surface;
+        if (typeof s === "string" && s) surfaces.push(s);
+      } catch {
+        // skip invalid line
+      }
     }
   }
   return surfaces;

@@ -5,6 +5,7 @@
   "dependencies": {
     "@google/genai": "^1.19.0",
     "@prisma/client": "^6.16.1",
-    "@huggingface/transformers": "^3.0.0"
+    "@huggingface/transformers": "^3.0.0",
+    "opencc": "^1.1.8"
   }
 }

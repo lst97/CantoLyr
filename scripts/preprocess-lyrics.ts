@@ -9,18 +9,8 @@
  * - Only fills required fields (line.semantics and source.genre) by merging LLM output back into original data.
  */
 
-import {
-  createReadStream,
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  statSync,
-} from "node:fs";
-import { once } from "node:events";
 import { dirname, join, relative, resolve } from "jsr:@std/path";
-import { createInterface } from "node:readline";
+import { TextLineStream } from "jsr:@std/streams/text-line-stream";
 import type {
   LyricsAnnotator,
   LyricsAnnotatorInput,
@@ -30,6 +20,15 @@ import { load } from "jsr:@std/dotenv";
 import { getLogger } from "jsr:@std/log";
 
 const logger = getLogger();
+
+function existsSync(path: string): boolean {
+  try {
+    Deno.statSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 type AnyRecord = Record<string, any>;
 
@@ -60,18 +59,24 @@ async function annotateFile(
     return true;
   }
 
-  const rl = createInterface({
-    input: createReadStream(inputFile, { encoding: "utf8" }),
-    crlfDelay: Infinity,
-  });
+  const file = await Deno.open(inputFile);
+  const lines = file.readable
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new TextLineStream());
 
   const rawLines: AnyRecord[] = [];
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try {
-      rawLines.push(JSON.parse(line));
-    } catch (e) {
-      logger.warn(`Skipping invalid JSONL line: ${e}`);
+  const reader = lines.getReader();
+  let done = false;
+  while (!done) {
+    const { value: line, done: d } = await reader.read();
+    done = d;
+    if (line !== undefined) {
+      if (!line.trim()) continue;
+      try {
+        rawLines.push(JSON.parse(line));
+      } catch (e) {
+        logger.warn(`Skipping invalid JSONL line: ${e}`);
+      }
     }
   }
 
@@ -110,10 +115,12 @@ async function annotateFile(
     result.lines.map((l) => [l.id, l.syntax_notes] as const),
   );
 
-  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+  if (!existsSync(outDir)) Deno.mkdirSync(outDir, { recursive: true });
 
   const tmpPath = outPath + ".tmp";
-  const out = createWriteStream(tmpPath, { encoding: "utf8" });
+  const outFile = await Deno.create(tmpPath);
+  const writer = outFile.writable.getWriter();
+  const encoder = new TextEncoder();
   for (const r of rawLines) {
     const semantics = semById.get(r["id"]) ||
       r["semantics"] || { themes: [], sentiment: "NEUTRAL", keywords: [] };
@@ -159,13 +166,13 @@ async function annotateFile(
         genre,
       },
     };
-    out.write(JSON.stringify(merged, null, 0) + "\n");
+    await writer.write(encoder.encode(JSON.stringify(merged, null, 0) + "\n"));
   }
-  out.end();
-  await once(out, "close");
+  await writer.close();
+  await outFile.close();
 
   // Atomic rename
-  renameSync(tmpPath, outPath);
+  Deno.renameSync(tmpPath, outPath);
   logger.info(`✅ Annotated -> ${outPath}`);
   return true;
 }
@@ -174,19 +181,19 @@ async function annotateFile(
 
 function listJsonlFiles(pathOrDir: string): string[] {
   const full = resolve(pathOrDir);
-  const st = statSync(full);
-  if (st.isFile()) return [full];
-  if (!st.isDirectory()) return [];
+  const st = Deno.statSync(full);
+  if (st.isFile) return [full];
+  if (!st.isDirectory) return [];
   const files: string[] = [];
   const stack: string[] = [full];
   while (stack.length) {
     const dir = stack.pop();
     if (!dir) continue;
-    for (const name of readdirSync(dir)) {
+    for (const name of Array.from(Deno.readDirSync(dir)).map((e) => e.name)) {
       const p = join(dir, name);
-      const s = statSync(p);
-      if (s.isDirectory()) stack.push(p);
-      else if (s.isFile() && name.endsWith(".jsonl")) files.push(p);
+      const s = Deno.statSync(p);
+      if (s.isDirectory) stack.push(p);
+      else if (s.isFile && name.endsWith(".jsonl")) files.push(p);
     }
   }
   return files;
@@ -217,7 +224,7 @@ async function main() {
   const provider = (
     args.get("provider") ||
     Deno.env.get("LLM_PROVIDER") ||
-    (Deno.env.get("GEMINI_API_KEY") ? "gemini" : "dummy")
+    (Deno.env.get("GEMINI_API_KEY") ? "gemini" : "invalid")
   ).toLowerCase();
   const modelArg = args.get("model");
   const resume = args.has("no-resume") ? false : true;
@@ -238,8 +245,10 @@ async function main() {
       enableFallback: Deno.env.get("LLM_ENABLE_FALLBACK") !== "false",
     });
   } else {
-    logger.error("Invalid provider");
-    return;
+    logger.error(
+      "Unsupported provider. Only 'gemini' is available. Set GEMINI_API_KEY or pass --provider gemini.",
+    );
+    Deno.exit(2);
   }
 
   const targetPath = allFeitsui ? resolve("data/sample/lyrics/feitsui") : maybeInput;

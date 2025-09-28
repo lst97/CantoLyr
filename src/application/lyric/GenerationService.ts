@@ -6,7 +6,7 @@ import { LyricErrorCode, LyricWarningCode } from "../../shared/lyric-codes.ts";
 import { PatternSlot, SegmentationPattern } from "../../domain/lyric/entities.ts";
 import { generatePatterns } from "../../domain/lyric/segmentation.ts";
 import { validate as toneValidate } from "../../domain/lyric/tone-compliance.ts";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "npm:@google/genai";
 
 export interface GenerationConfig {
   variantsPerPattern: number;

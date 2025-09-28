@@ -17,7 +17,8 @@ export function requestLogger() {
     } finally {
       const dur = Math.round(performance.now() - start);
       const ua = c.req.header("user-agent") || "";
-      const ip = c.req.header("x-forwarded-for") ||
+      const forwardedFor = c.req.header("x-forwarded-for");
+      const ip = forwardedFor?.split(",")[0]?.trim() ||
         getConnInfo(c).remote.address ||
         "";
       const log = httpLogger.child({ reqId });

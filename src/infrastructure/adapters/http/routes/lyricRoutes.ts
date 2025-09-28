@@ -114,9 +114,7 @@ export function registerLyricRoutes(app: Hono, container: Container) {
           fromCache: true,
           options: cachedOptions,
         });
-        const json = JSON.stringify(response);
-        c.header("Content-Type", "application/json; charset=utf-8");
-        return c.body(json);
+        return c.json(response);
       }
 
       const repo = container.resolve("lyricsRepo") as LyricsRepo;
@@ -128,9 +126,7 @@ export function registerLyricRoutes(app: Hono, container: Container) {
         fromCache: false,
         options,
       });
-      const json = JSON.stringify(response);
-      c.header("Content-Type", "application/json; charset=utf-8");
-      return c.body(json);
+      return c.json(response);
     } catch (error) {
       logger.error("lyrics_filter_options_failed", {
         error: error instanceof Error ? error.message : String(error),
@@ -258,9 +254,7 @@ export function registerLyricRoutes(app: Hono, container: Container) {
         fromCache: false,
         processingTimeMs: Date.now() - startedAt,
       });
-      const json = JSON.stringify(response);
-      c.header("Content-Type", "application/json; charset=utf-8");
-      return c.body(json);
+      return c.json(response);
     } catch (error) {
       if (error instanceof ZodError) {
         return c.json({
@@ -395,9 +389,7 @@ export function registerLyricRoutes(app: Hono, container: Container) {
         ...payload,
         meta: { ...payload.meta, processingTimeMs },
       });
-      const json = JSON.stringify(response);
-      c.header("Content-Type", "application/json; charset=utf-8");
-      return c.body(json);
+      return c.json(response);
     } catch (error) {
       if (error instanceof ZodError) {
         return c.json({

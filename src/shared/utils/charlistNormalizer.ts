@@ -4,8 +4,7 @@
  */
 
 import { normalizeJyutping } from "./jyutping.ts";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { resolve } from "jsr:@std/path";
 import type { NormalizedEntry, NormalizedReading } from "../types/data.ts";
 import { getLogger } from "jsr:@std/log";
 
@@ -55,11 +54,11 @@ let CANTONESE_TABLE: CantonesePinyinTable | null = null;
 
 function loadCantoneseTable(): CantonesePinyinTable {
   if (CANTONESE_TABLE) return CANTONESE_TABLE;
-  const tablePath = path.resolve(
+  const tablePath = resolve(
     Deno.cwd(),
     "data/sample/cantonese_pinyin_table.json",
   );
-  const raw = readFileSync(tablePath, "utf-8");
+  const raw = new TextDecoder().decode(Deno.readFileSync(tablePath));
   CANTONESE_TABLE = JSON.parse(raw) as CantonesePinyinTable;
   return CANTONESE_TABLE!;
 }
