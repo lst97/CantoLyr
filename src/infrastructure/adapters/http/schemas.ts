@@ -239,10 +239,10 @@ export const LyricSearchQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(20480).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 }).superRefine((value, ctx) => {
-  const hasTone = typeof value.tone === "string" && value.tone.length > 0;
-  const hasRhyme = typeof value.rhyme === "string" && value.rhyme.length > 0;
-  const hasRhythm = typeof value.rhythm === "string" && value.rhythm.length > 0;
-  const hasRythem = typeof value.rythem === "string" && value.rythem.length > 0;
+  const hasTone = typeof value.tone === "string" && value.tone.trim().length > 0;
+  const hasRhyme = typeof value.rhyme === "string" && value.rhyme.trim().length > 0;
+  const hasRhythm = typeof value.rhythm === "string" && value.rhythm.trim().length > 0;
+  const hasRythem = typeof value.rythem === "string" && value.rythem.trim().length > 0;
   if (!hasTone && !hasRhyme && !hasRhythm && !hasRythem) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

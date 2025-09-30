@@ -250,9 +250,17 @@ export function registerSearchRoutes(app: Hono, container: Container) {
       const repo = container.resolve("lyricsRepo") as LyricsRepo;
       const themes = q.themes ? q.themes.split(",").filter(Boolean) : undefined;
       const keywords = q.keywords ? q.keywords.split(",").filter(Boolean) : undefined;
+      const rhymeParts = q.r
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0);
+      const rhymeParam = rhymeParts.length > 1
+        ? Array.from(new Set(rhymeParts))
+        : rhymeParts[0] ?? undefined;
+
       const [results, totalCount] = await Promise.all([
         repo.searchLyricLines({
-          rhyme: q.r,
+          rhyme: rhymeParam,
           rhymePosition: q.rhymePosition,
           themes,
           keywords,
@@ -265,7 +273,7 @@ export function registerSearchRoutes(app: Hono, container: Container) {
           offset: q.offset,
         }),
         repo.countLyricLines({
-          rhyme: q.r,
+          rhyme: rhymeParam,
           rhymePosition: q.rhymePosition,
           themes,
           keywords,
@@ -277,8 +285,9 @@ export function registerSearchRoutes(app: Hono, container: Container) {
         }),
       ]);
 
+      const queryTerm = Array.isArray(rhymeParam) ? rhymeParam.join(",") : rhymeParam ?? q.r;
       const payload = LyricSearchResponseSchema.parse({
-        query: q.r,
+        query: queryTerm,
         count: totalCount,
         items: results.map((item: LyricLineDTO) => ({
           ...item,

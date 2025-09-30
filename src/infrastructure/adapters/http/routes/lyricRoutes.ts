@@ -161,15 +161,23 @@ export function registerLyricRoutes(app: Hono, container: Container) {
           .filter((keyword: string) => keyword.length > 0)
         : undefined;
 
-      const rhymeInput = typeof query.rhyme === "string" && query.rhyme.length > 0
+      const rawRhymeCandidate = typeof query.rhyme === "string" && query.rhyme.length > 0
         ? query.rhyme
         : typeof query.rhythm === "string" && query.rhythm.length > 0
         ? query.rhythm
         : typeof query.rythem === "string" && query.rythem.length > 0
         ? query.rythem
         : undefined;
-      const rhymeValue = typeof rhymeInput === "string" ? rhymeInput.trim() : "";
-      const rhyme = rhymeValue.length > 0 ? rhymeValue : undefined;
+
+      const rhymeParts = typeof rawRhymeCandidate === "string"
+        ? rawRhymeCandidate
+          .split(",")
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0)
+        : [];
+      const rhyme = rhymeParts.length > 1
+        ? Array.from(new Set(rhymeParts))
+        : rhymeParts[0] ?? undefined;
       const rhymePosition = query.rhymePosition ?? query.rhythmPosition ?? query.rythemPosition;
 
       const [items, totalCount] = await Promise.all([
@@ -203,7 +211,7 @@ export function registerLyricRoutes(app: Hono, container: Container) {
         }),
       ]);
 
-      const queryTerm = tone ?? rhyme ?? "";
+      const queryTerm = tone ?? (Array.isArray(rhyme) ? rhyme.join(",") : rhyme ?? "");
       const response = LyricSearchResponseSchema.parse({
         query: queryTerm,
         count: totalCount,

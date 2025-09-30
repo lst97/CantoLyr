@@ -126,7 +126,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((err) => {
-    logger.error("❌ Unhandled error during startup:", err);
+    logger.error(`❌ Unhandled error during startup: ${err?.message ?? String(err)}`);
     Deno.exit(1);
   });
 }

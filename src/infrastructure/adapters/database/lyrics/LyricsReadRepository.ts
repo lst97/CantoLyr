@@ -111,6 +111,9 @@ export class LyricsReadRepository implements LyricsRepo {
     const rhymeContext = this.buildRhymeContext(rhyme, rhymePosition);
     const where = this.buildWhereClause(params, rhymeContext?.clause);
 
+    const normalizedPronunciation = typeof pronunciation === "string" ? pronunciation.trim() : "";
+    const toneLength = normalizedPronunciation.length;
+
     const rows = await this.prisma.lyricLine.findMany({
       where,
       include: {
@@ -128,11 +131,11 @@ export class LyricsReadRepository implements LyricsRepo {
             },
           },
         },
-        toneNgrams: pronunciation
+        toneNgrams: normalizedPronunciation
           ? {
             where: {
-              n: 2,
-              value: pronunciation,
+              value: normalizedPronunciation,
+              ...(toneLength > 0 ? { n: toneLength } : {}),
               ...(pronunciationPosition ? { position: pronunciationPosition } : {}),
             },
             select: { value: true, position: true },
@@ -323,12 +326,15 @@ export class LyricsReadRepository implements LyricsRepo {
       and.push({ keywords: { some: { keyword: { word: { in: keywords } } } } });
     }
 
-    if (pronunciation) {
+    const normalizedPronunciation = typeof pronunciation === "string" ? pronunciation.trim() : "";
+
+    if (normalizedPronunciation.length > 0) {
+      const toneLength = normalizedPronunciation.length;
       and.push({
         toneNgrams: {
           some: {
-            n: 2,
-            value: pronunciation,
+            value: normalizedPronunciation,
+            ...(toneLength > 0 ? { n: toneLength } : {}),
             ...(pronunciationPosition ? { position: pronunciationPosition } : {}),
           },
         },
@@ -355,37 +361,53 @@ export class LyricsReadRepository implements LyricsRepo {
   }
 
   private buildRhymeContext(
-    rhyme?: string,
+    rhyme?: string | string[],
     rhymePosition?: number,
   ): { clause: Record<string, unknown>; targets: Set<string>; position?: number } | undefined {
-    if (!rhyme) {
-      return undefined;
-    }
-    const normalizedInput = rhyme.trim().toLowerCase();
-    if (normalizedInput.length === 0) {
+    const rawInputs = Array.isArray(rhyme)
+      ? rhyme
+      : typeof rhyme === "string"
+      ? rhyme.split(",")
+      : [];
+
+    const normalizedInputs = rawInputs
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => value.length > 0);
+
+    if (normalizedInputs.length === 0) {
       return undefined;
     }
 
-    const withoutTone = normalizedInput.replace(/\d+$/u, "");
     const targets = new Set<string>();
-    targets.add(normalizedInput);
-    if (withoutTone.length > 0) {
-      targets.add(withoutTone);
+    for (const input of normalizedInputs) {
+      targets.add(input);
+      const withoutTone = input.replace(/\d+$/u, "");
+      if (withoutTone.length > 0) {
+        targets.add(withoutTone);
+      }
     }
 
-    const clause: Record<string, unknown> = {};
-    if (typeof rhymePosition === "number") {
-      clause.position = rhymePosition;
-    }
-    clause.OR = Array.from(targets).flatMap((target) => [
+    const clauses = Array.from(targets).flatMap((target) => [
       { rhyme: target },
       { jyutpingNormalized: target },
     ]);
 
+    if (clauses.length === 0) {
+      return undefined;
+    }
+
+    const clause: Record<string, unknown> = { OR: clauses };
+    const normalizedPosition = typeof rhymePosition === "number" && Number.isFinite(rhymePosition)
+      ? rhymePosition
+      : undefined;
+    if (typeof normalizedPosition === "number") {
+      clause.position = normalizedPosition;
+    }
+
     return {
       clause,
       targets,
-      position: typeof rhymePosition === "number" ? rhymePosition : undefined,
+      position: normalizedPosition,
     };
   }
 }

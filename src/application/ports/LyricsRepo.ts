@@ -49,8 +49,8 @@ export interface LyricSearchParams {
   pronunciation?: string;
   // optional position constraint (1-based start index)
   pronunciationPosition?: number;
-  // rhyme token and optional position
-  rhyme?: string;
+  // rhyme token(s) and optional position
+  rhyme?: string | string[];
   rhymePosition?: number;
   // metadata filters
   themes?: string[];
