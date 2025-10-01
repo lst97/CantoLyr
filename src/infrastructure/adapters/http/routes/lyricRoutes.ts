@@ -88,16 +88,6 @@ function deriveLineSeed(
 }
 
 export function registerLyricRoutes(app: Hono, container: Container) {
-  const segmentation = new SegmentationService();
-  const retrieval = new RetrievalService();
-  const generation = new GenerationService();
-  const ranking = new RankingService();
-  const sessionService = new SessionService(
-    segmentation,
-    retrieval,
-    generation,
-    ranking,
-  );
   const logger = container.resolve("logger");
   const cache = container.resolve("cache");
   const FILTER_CACHE_KEY = "lyrics:filter-options";
@@ -318,6 +308,15 @@ export function registerLyricRoutes(app: Hono, container: Container) {
     try {
       const body = await c.req.json();
       const parsed = LyricGenerateRequestSchema.parse(body);
+      const geminiApiKey = c.req.header("X-Gemini-API-Key");
+      if (!geminiApiKey) {
+        return c.json({
+          error: {
+            code: "INVALID_REQUEST",
+            message: "X-Gemini-API-Key header is required",
+          },
+        }, 400);
+      }
       const toneInputs = Array.isArray(parsed.tones) ? parsed.tones : parsed.tones.split(",");
       const toneSequences = toneInputs
         .map((seq: string) => seq.trim())
@@ -330,6 +329,18 @@ export function registerLyricRoutes(app: Hono, container: Container) {
           },
         }, 400);
       }
+
+      // Create services with the provided Gemini API key
+      const segmentation = new SegmentationService();
+      const retrieval = new RetrievalService(3, geminiApiKey);
+      const generation = new GenerationService(geminiApiKey);
+      const ranking = new RankingService(geminiApiKey);
+      const sessionService = new SessionService(
+        segmentation,
+        retrieval,
+        generation,
+        ranking,
+      );
 
       const seed = parsed.seed ?? Math.floor(Math.random() * 1_000_000);
       const config = buildDefaultLinePipelineConfig();

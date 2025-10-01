@@ -1,6 +1,7 @@
 import { ChromaClient } from "chromadb";
 import { Logger } from "../../logging/Logger.ts";
 import { pipeline } from "npm:@huggingface/transformers";
+import SiliconFlowEmbeddingProvider from "../embedding/SiliconFlowEmbeddingProvider.ts";
 
 export interface ChromaSearchResult {
   documents: string[][];
@@ -32,13 +33,19 @@ export class ChromaSearchService {
   private embeddingModel: string;
   private transformersCache: string;
   private embeddingFunction: any = null;
+  private siliconflowProvider: SiliconFlowEmbeddingProvider | null = null;
+  private useCloudEmbedding = false;
   private isInitialized = false;
 
   constructor(chromaUrl: string = "http://localhost:8000") {
     this.chromaUrl = chromaUrl;
     this.logger = Logger.for("vector");
-    this.embeddingModel = Deno.env.get("EMBEDDING_MODEL") ||
-      "onnx-community/Qwen3-Embedding-0.6B-ONNX";
+    const provider = (Deno.env.get("EMBEDDING_PROVIDER") || "").toLowerCase();
+    const hasSiliconKey = Boolean(Deno.env.get("SILICONFLOW_API_KEY"));
+    this.useCloudEmbedding = provider === "siliconflow" || (!provider && hasSiliconKey);
+    this.embeddingModel = this.useCloudEmbedding
+      ? (Deno.env.get("SILICONFLOW_EMBED_MODEL") || "Qwen/Qwen3-Embedding-0.6B")
+      : (Deno.env.get("EMBEDDING_MODEL") || "onnx-community/Qwen3-Embedding-0.6B-ONNX");
     this.transformersCache = Deno.env.get("TRANSFORMERS_CACHE") || "./.cache/transformers";
 
     const url = new URL(chromaUrl);
@@ -64,6 +71,19 @@ export class ChromaSearchService {
   }
 
   private async initializeEmbeddingFunction(): Promise<void> {
+    if (this.useCloudEmbedding) {
+      const apiKey = Deno.env.get("SILICONFLOW_API_KEY");
+      const baseUrl = Deno.env.get("SILICONFLOW_BASE_URL") || "https://api.siliconflow.cn";
+      if (!apiKey) throw new Error("SILICONFLOW_API_KEY is required when EMBEDDING_PROVIDER=siliconflow");
+      this.siliconflowProvider = new SiliconFlowEmbeddingProvider({
+        apiKey,
+        model: this.embeddingModel,
+        baseUrl,
+      });
+      this.logger.info(`✅ SiliconFlow embedding provider initialized: ${this.embeddingModel}`);
+      return;
+    }
+
     this.logger.info(`📥 Initializing ONNX embedding model: ${this.embeddingModel}`);
     this.logger.info(`📁 Cache directory: ${this.transformersCache}`);
 
@@ -86,11 +106,16 @@ export class ChromaSearchService {
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.embeddingFunction) {
-      throw new Error("Embedding function not initialized. Call initialize() first.");
-    }
-
     try {
+      if (this.useCloudEmbedding) {
+        if (!this.siliconflowProvider) throw new Error("Cloud embedding provider not initialized");
+        const [vec] = await this.siliconflowProvider.embed([text]);
+        if (!vec) throw new Error("No embedding returned from SiliconFlow");
+        return vec.map((x) => Number(x));
+      }
+      if (!this.embeddingFunction) {
+        throw new Error("Embedding function not initialized. Call initialize() first.");
+      }
       const output = await this.embeddingFunction([text], {
         pooling: "last_token",
         normalize: true,

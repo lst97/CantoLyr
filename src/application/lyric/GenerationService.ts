@@ -80,8 +80,8 @@ export class GenerationService {
   private geminiApiKey?: string;
   private geminiSentenceModel: string;
 
-  constructor() {
-    this.geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? undefined;
+  constructor(geminiApiKey?: string) {
+    this.geminiApiKey = geminiApiKey ?? Deno.env.get("GEMINI_API_KEY") ?? undefined;
     // Reuse the same lightweight model as RetrievalService unless overridden
     this.geminiSentenceModel = Deno.env.get("GEMINI_SENTENCE_MODEL") ??
       (Deno.env.get("GEMINI_SCENE_MODEL") ?? "gemini-2.5-flash");

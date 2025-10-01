@@ -93,8 +93,8 @@ export class RankingService {
   private geminiApiKey?: string;
   private geminiRerankModel: string;
 
-  constructor() {
-    this.geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? undefined;
+  constructor(geminiApiKey?: string) {
+    this.geminiApiKey = geminiApiKey ?? Deno.env.get("GEMINI_API_KEY") ?? undefined;
     this.geminiRerankModel = Deno.env.get("GEMINI_RERANK_MODEL") ??
       (Deno.env.get("GEMINI_SCENE_MODEL") ??
         "gemini-2.0-flash-lite-preview-02-05");

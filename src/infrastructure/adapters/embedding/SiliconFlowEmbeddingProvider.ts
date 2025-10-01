@@ -19,7 +19,7 @@ export class SiliconFlowEmbeddingProvider {
     if (!cfg?.apiKey) throw new Error("SILICONFLOW_API_KEY is required");
     this.apiKey = cfg.apiKey;
     this.model = cfg.model || "Qwen/Qwen3-Embedding-0.6B";
-    this.baseUrl = (cfg.baseUrl || "https://api.siliconflow.cn").replace(/\/$/, "");
+    this.baseUrl = (cfg.baseUrl || "https://api.siliconflow.com").replace(/\/$/, "");
     this.timeoutMs = cfg.timeoutMs ?? 15000;
   }
 

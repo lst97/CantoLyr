@@ -242,18 +242,19 @@ export class RetrievalService {
   private geminiSceneModel: string;
   private prisma: PrismaClient | null = null;
   private genAI: GoogleGenAI | null = null;
-  constructor(private readonly minPerDigit = 3) {
+  constructor(private readonly minPerDigit = 3, geminiApiKey?: string) {
     this.collectionName = Deno.env.get("CHROMA_COLLECTION") ??
       "cantolyr_lexicon_v1_1024";
     this.chromaUrl = Deno.env.get("CHROMA_URL") ?? "http://localhost:8000";
 
-    const embeddingProvider = (Deno.env.get("EMBEDDING_PROVIDER") || "local").toLowerCase();
-    this.useCloudEmbedding = embeddingProvider === "siliconflow";
+    const embeddingProvider = (Deno.env.get("EMBEDDING_PROVIDER") || "").toLowerCase();
+    const hasSiliconKey = Boolean(Deno.env.get("SILICONFLOW_API_KEY"));
+    this.useCloudEmbedding = embeddingProvider === "siliconflow" || (!embeddingProvider && hasSiliconKey);
 
     // Model IDs default depending on backend
     if (this.useCloudEmbedding) {
+      // When using cloud embeddings, do NOT fall back to EMBEDDING_MODEL (ONNX ids are not valid for cloud APIs)
       this.embeddingModel = Deno.env.get("SILICONFLOW_EMBED_MODEL") ||
-        Deno.env.get("EMBEDDING_MODEL") ||
         "Qwen/Qwen3-Embedding-0.6B";
     } else {
       this.embeddingModel = Deno.env.get("EMBEDDING_MODEL") ||
@@ -277,7 +278,7 @@ export class RetrievalService {
       });
     }
 
-    this.geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? undefined;
+    this.geminiApiKey = geminiApiKey ?? Deno.env.get("GEMINI_API_KEY") ?? undefined;
     this.geminiSceneModel = Deno.env.get("GEMINI_SCENE_MODEL") ??
       "gemini-2.5-flash-lite";
   }
