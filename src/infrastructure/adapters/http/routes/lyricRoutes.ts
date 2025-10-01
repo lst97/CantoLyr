@@ -4,6 +4,7 @@ import {
   LyricFilterOptionsResponseSchema,
   LyricGenerateRequestSchema,
   LyricGenerationResponseSchema,
+  LyricSearchQuery,
   LyricSearchQuerySchema,
   LyricSearchResponseSchema,
 } from "../schemas.ts";
@@ -53,6 +54,7 @@ function mapMatchedSyllable(syllable: MatchedSyllableDTO) {
     rhyme: syllable.rhyme ?? null,
     toneRaw: syllable.toneRaw ?? null,
     toneDigit: syllable.toneDigit ?? null,
+    char: syllable.char ?? null,
   };
 }
 
@@ -60,14 +62,14 @@ function buildSceneIntent(
   prompt: string,
   scene?: Partial<SceneIntent>,
 ): SceneIntent {
-  const rawEmotions = Array.isArray(scene?.emotions) ? scene.emotions ?? [] : [];
+  const rawEmotions = scene?.emotions ?? [];
   return {
-    title: scene?.title?.trim() || prompt,
+    title: scene?.title ?? prompt,
     emotions: rawEmotions
       .map((emotion) => emotion?.trim())
       .filter((emotion): emotion is string => Boolean(emotion)),
-    microIntent: scene?.microIntent?.trim() || prompt,
-    continuityNotes: scene?.continuityNotes?.trim() || "",
+    microIntent: scene?.microIntent ?? prompt,
+    continuityNotes: scene?.continuityNotes ?? "",
   };
 }
 
@@ -143,11 +145,16 @@ export function registerLyricRoutes(app: Hono, container: Container) {
   app.get("/lyrics/search", async (c) => {
     const startedAt = Date.now();
     try {
-      const query = LyricSearchQuerySchema.parse(c.req.query());
+      const query: LyricSearchQuery = LyricSearchQuerySchema.parse(c.req.query());
       const repo = container.resolve("lyricsRepo") as LyricsRepo;
 
-      const toneValue = typeof query.tone === "string" ? query.tone.trim() : "";
-      const tone = toneValue.length > 0 ? toneValue : undefined;
+      const toneValueRaw = typeof query.tone === "string" ? query.tone.trim() : "";
+      const toneDigits = toneValueRaw.replace(/\D+/gu, "");
+      const tone = toneDigits.length > 0
+        ? toneDigits
+        : toneValueRaw.length > 0
+        ? toneValueRaw
+        : undefined;
       const themes = query.themes
         ? query.themes
           .split(",")
@@ -169,6 +176,16 @@ export function registerLyricRoutes(app: Hono, container: Container) {
         ? query.rythem
         : undefined;
 
+      const rhymeSequence = query.rhymeSequence;
+
+      const normalizedMode = typeof query.mode === "string"
+        ? query.mode.trim().toLowerCase()
+        : undefined;
+      const shouldRunSequenceFromMode = normalizedMode === "sequence";
+      const shouldRunInclusiveFromMode = normalizedMode === "inclusive";
+      const forceSequence = shouldRunSequenceFromMode;
+      const forceInclusive = shouldRunInclusiveFromMode;
+
       const rhymeParts = typeof rawRhymeCandidate === "string"
         ? rawRhymeCandidate
           .split(",")
@@ -176,7 +193,7 @@ export function registerLyricRoutes(app: Hono, container: Container) {
           .filter((part) => part.length > 0)
         : [];
       const rhyme = rhymeParts.length > 1
-        ? Array.from(new Set(rhymeParts))
+        ? (forceSequence ? rhymeParts : Array.from(new Set(rhymeParts)))
         : rhymeParts[0] ?? undefined;
       const rhymePosition = query.rhymePosition ?? query.rhythmPosition ?? query.rythemPosition;
 
@@ -186,6 +203,7 @@ export function registerLyricRoutes(app: Hono, container: Container) {
           pronunciationPosition: query.tonePosition,
           rhyme,
           rhymePosition,
+          rhymeSequence: forceSequence ? true : forceInclusive ? false : rhymeSequence,
           themes,
           keywords,
           lyricist: query.lyricist,
@@ -201,6 +219,7 @@ export function registerLyricRoutes(app: Hono, container: Container) {
           pronunciationPosition: query.tonePosition,
           rhyme,
           rhymePosition,
+          rhymeSequence: forceSequence ? true : forceInclusive ? false : rhymeSequence,
           themes,
           keywords,
           lyricist: query.lyricist,
@@ -258,6 +277,19 @@ export function registerLyricRoutes(app: Hono, container: Container) {
             return undefined;
           })(),
           syntaxNotes: item.syntaxNotes ?? null,
+          rhymeMatches: Array.isArray(item.rhymeMatches) && item.rhymeMatches.length > 0
+            ? item.rhymeMatches.map((match) => ({
+              value: match.value,
+              position: match.position,
+              length: match.length,
+              characters: match.characters ?? undefined,
+            }))
+            : undefined,
+          normalization: {
+            isValid: Boolean(item.normalization?.isValid),
+            originalText: item.normalization?.originalText ?? null,
+            notes: item.normalization?.notes ?? null,
+          },
         })),
         fromCache: false,
         processingTimeMs: Date.now() - startedAt,

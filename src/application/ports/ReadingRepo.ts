@@ -80,12 +80,17 @@ export interface ReadingRepo {
   ): Promise<number>;
 
   /** Count readings that contain a specific rhyme */
-  countByRhyme(query: { rhyme: string; entryType?: EntryType }): Promise<number>;
-
-  /** Find readings that contain a specific rhyme in their decomposition */
-  searchByRhyme(query: {
-    rhyme: string;
+  countByRhyme(query: {
+    rhyme: string[];
     entryType?: EntryType;
+    requireSequence?: boolean;
+  }): Promise<number>;
+
+  /** Find readings that contain specific rhymes in their decomposition */
+  searchByRhyme(query: {
+    rhyme: string[];
+    entryType?: EntryType;
+    requireSequence?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<ReadingDTO[]>;

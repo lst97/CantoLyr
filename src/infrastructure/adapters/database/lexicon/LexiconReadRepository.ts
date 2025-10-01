@@ -51,17 +51,12 @@ export class LexiconReadRepository implements ReadingRepo {
   }
 
   async countByRhyme(query: {
-    rhyme: string;
+    rhyme: string[];
     entryType?: EntryType;
+    requireSequence?: boolean;
   }): Promise<number> {
-    const { rhyme, entryType } = query;
-    const entryTypeCondition = entryType ? { type: entryType } : {};
-    return await this.prisma.reading.count({
-      where: {
-        rhymes: { has: rhyme },
-        entry: entryTypeCondition,
-      },
-    });
+    const readings = await this.filterReadingsByRhymes(query);
+    return readings.length;
   }
 
   async searchByPronunciation(query: {
@@ -101,26 +96,90 @@ export class LexiconReadRepository implements ReadingRepo {
   }
 
   async searchByRhyme(query: {
-    rhyme: string;
+    rhyme: string[];
     entryType?: EntryType;
+    requireSequence?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<ReadingDTO[]> {
-    const { rhyme, entryType, limit = 50, offset = 0 } = query;
-    const entryTypeCondition = entryType ? { type: entryType } : {};
+    const { limit = 50, offset = 0 } = query;
+    const readings = await this.filterReadingsByRhymes(query);
+    const windowed = readings.slice(offset, offset + limit);
+    return windowed.map((reading) => this.mapToDTO(reading));
+  }
 
+  private async filterReadingsByRhymes(query: {
+    rhyme: string[];
+    entryType?: EntryType;
+    requireSequence?: boolean;
+  }): Promise<any[]> {
+    const normalizedTargets = this.normalizeRhymes(query.rhyme);
+    if (normalizedTargets.length === 0) {
+      return [];
+    }
+
+    const entryTypeCondition = query.entryType ? { type: query.entryType } : {};
     const readings = await this.prisma.reading.findMany({
-      where: { rhymes: { has: rhyme }, entry: entryTypeCondition },
+      where: {
+        rhymes: { hasSome: normalizedTargets },
+        entry: entryTypeCondition,
+      },
       include: { entry: true },
       orderBy: [
         { entry: { type: "asc" } },
         { syllables: "asc" },
         { pronunciation: "asc" },
       ],
-      take: limit,
-      skip: offset,
     });
-    return readings.map(this.mapToDTO);
+
+    return readings.filter((reading) =>
+      this.matchesRhymes(
+        Array.isArray(reading.rhymes) ? reading.rhymes : [],
+        normalizedTargets,
+        query.requireSequence ?? false,
+      )
+    );
+  }
+
+  private normalizeRhymes(rhymes: string[]): string[] {
+    return Array.from(
+      new Set(
+        rhymes
+          .map((value) => value?.trim().toLowerCase() ?? "")
+          .filter((value) => value.length > 0),
+      ),
+    );
+  }
+
+  private matchesRhymes(
+    rhymeList: string[],
+    required: string[],
+    requireSequence: boolean,
+  ): boolean {
+    if (required.length === 0) return false;
+    const normalizedList = rhymeList.map((value) => value?.toLowerCase() ?? "");
+
+    if (requireSequence) {
+      if (required.length > normalizedList.length) return false;
+      for (let start = 0; start <= normalizedList.length - required.length; start++) {
+        let matched = true;
+        for (let idx = 0; idx < required.length; idx++) {
+          if (normalizedList[start + idx] !== required[idx]) {
+            matched = false;
+            break;
+          }
+        }
+        if (matched) return true;
+      }
+      return false;
+    }
+
+    for (const target of required) {
+      if (!normalizedList.includes(target)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private mapToDTO(reading: any): ReadingDTO {

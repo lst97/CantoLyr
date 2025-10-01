@@ -12,6 +12,12 @@ interface TokenRecord {
   pos?: string | null;
 }
 
+interface NormalizationRecord {
+  isValid: boolean;
+  originalText: string | null;
+  validationNotes: string | null;
+}
+
 interface LyricJsonlRecord {
   id: string;
   text: string;
@@ -44,6 +50,7 @@ interface LyricJsonlRecord {
     next_line_id: string | null;
     paragraph_id: string | null;
   };
+  normalization: NormalizationRecord;
 }
 
 interface EntityCaches {
@@ -74,6 +81,9 @@ interface JyutpingSplitResult {
 }
 
 const TONE_DIGIT_MAP: Record<number, number> = { 1: 3, 2: 9, 3: 4, 4: 0, 5: 5, 6: 2 };
+const HAN_REGEX = /\p{Script=Han}/u;
+const LETTER_REGEX = /\p{Letter}/u;
+const NUMBER_REGEX = /\p{Number}/u;
 
 interface PreparedSyllable {
   position: number;
@@ -102,8 +112,16 @@ interface PreparedLine {
     syllableCount: number;
     tokenCount: number;
   }>;
+  rhymeNgrams: Array<{
+    n: number;
+    value: string;
+    position: number;
+    syllableCount: number;
+    tokenCount: number;
+  }>;
   themeIds: bigint[];
   keywordIds: bigint[];
+  normalization: NormalizationRecord;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -219,6 +237,47 @@ function splitJyutping(
   } satisfies JyutpingSplitResult;
 }
 
+function isSyllabicChar(char: string): boolean {
+  return HAN_REGEX.test(char) || LETTER_REGEX.test(char) || NUMBER_REGEX.test(char);
+}
+
+function collectSyllabicChars(text: string | null | undefined): string[] {
+  if (!text) return [];
+  return Array.from(text).filter((char) => isSyllabicChar(char));
+}
+
+function resolveSyllableChars(
+  candidates: Array<string | null | undefined>,
+  expected: number,
+): string[] {
+  if (expected <= 0) {
+    return [];
+  }
+
+  for (const candidate of candidates) {
+    const chars = collectSyllabicChars(candidate);
+    if (chars.length === expected) {
+      return chars;
+    }
+  }
+
+  for (const candidate of candidates) {
+    const chars = collectSyllabicChars(candidate);
+    if (chars.length >= expected) {
+      return chars.slice(0, expected);
+    }
+  }
+
+  for (const candidate of candidates) {
+    const chars = collectSyllabicChars(candidate);
+    if (chars.length > 0) {
+      return chars;
+    }
+  }
+
+  return [];
+}
+
 function toLyricRecord(
   raw: Record<string, unknown>,
   fallbackLineIndex: number,
@@ -242,6 +301,7 @@ function toLyricRecord(
   const semanticsRaw = isRecord(raw["semantics"]) ? raw["semantics"] : null;
   const prosodyRaw = isRecord(raw["prosody"]) ? raw["prosody"] : null;
   const nlpRaw = isRecord(raw["nlp"]) ? raw["nlp"] : null;
+  const normalizationRaw = isRecord(raw["normalization"]) ? raw["normalization"] : null;
 
   const structure = {
     line_index: typeof structureRaw?.["line_index"] === "number"
@@ -281,6 +341,20 @@ function toLyricRecord(
     ? (nlpRaw["syntax_notes"] as string)
     : null;
 
+  const isValidRaw = normalizationRaw?.["is_valid"];
+  const originalTextRaw = typeof normalizationRaw?.["original_text"] === "string"
+    ? normalizationRaw["original_text"].trim()
+    : "";
+  const validationNotesRaw = typeof normalizationRaw?.["validation_notes"] === "string"
+    ? normalizationRaw["validation_notes"].trim()
+    : "";
+
+  const normalization: NormalizationRecord = {
+    isValid: typeof isValidRaw === "boolean" ? isValidRaw : true,
+    originalText: originalTextRaw.length > 0 ? originalTextRaw : null,
+    validationNotes: validationNotesRaw.length > 0 ? validationNotesRaw : null,
+  };
+
   const titleValue = typeof sourceRaw["title"] === "string" ? sourceRaw["title"] as string : "";
   const yearValue = typeof sourceRaw["year"] === "number" && Number.isFinite(sourceRaw["year"])
     ? Math.trunc(sourceRaw["year"] as number)
@@ -317,6 +391,7 @@ function toLyricRecord(
         ? contextRaw["paragraph_id"] as string
         : null,
     },
+    normalization,
   };
 }
 
@@ -449,30 +524,91 @@ async function ensureKeyword(
   return created.id;
 }
 
-function computeToneBigrams(pattern: number[]): Array<{
+function computeToneNgrams(pattern: number[]): Array<{
   n: number;
   value: string;
   position: number;
   syllableCount: number;
   tokenCount: number;
 }> {
-  const bigrams: Array<
-    { n: number; value: string; position: number; syllableCount: number; tokenCount: number }
-  > = [];
-  for (let idx = 0; idx < pattern.length - 1; idx++) {
-    const first = pattern[idx];
-    const second = pattern[idx + 1];
-    if (Number.isInteger(first) && Number.isInteger(second)) {
-      bigrams.push({
-        n: 2,
-        value: `${first}${second}`,
-        position: idx + 1,
-        syllableCount: 2,
-        tokenCount: 2,
+  const ngrams: Array<{
+    n: number;
+    value: string;
+    position: number;
+    syllableCount: number;
+    tokenCount: number;
+  }> = [];
+
+  for (let start = 0; start < pattern.length; start++) {
+    const startValue = pattern[start];
+    if (!Number.isInteger(startValue)) {
+      continue;
+    }
+
+    let valueBuilder = "";
+    for (let end = start; end < pattern.length; end++) {
+      const currentValue = pattern[end];
+      if (!Number.isInteger(currentValue)) {
+        break;
+      }
+      valueBuilder += Math.trunc(currentValue).toString();
+      const length = end - start + 1;
+      ngrams.push({
+        n: length,
+        value: valueBuilder,
+        position: start + 1,
+        syllableCount: length,
+        tokenCount: length,
       });
     }
   }
-  return bigrams;
+
+  return ngrams;
+}
+
+function computeRhymeNgrams(syllables: PreparedSyllable[]): Array<{
+  n: number;
+  value: string;
+  position: number;
+  syllableCount: number;
+  tokenCount: number;
+}> {
+  const ngrams: Array<{
+    n: number;
+    value: string;
+    position: number;
+    syllableCount: number;
+    tokenCount: number;
+  }> = [];
+
+  const normalized = syllables.map((s) =>
+    (s.rhyme ?? s.jyutpingNormalized ?? "").toLowerCase().trim()
+  );
+
+  for (let start = 0; start < normalized.length; start++) {
+    const startValue = normalized[start];
+    if (!startValue) {
+      continue;
+    }
+    const parts: string[] = [];
+    for (let end = start; end < normalized.length; end++) {
+      const current = normalized[end];
+      if (!current) {
+        break;
+      }
+      parts.push(current);
+      const length = end - start + 1;
+      ngrams.push({
+        n: length,
+        value: parts.join(","),
+        position: start + 1,
+        syllableCount: length,
+        tokenCount: length,
+      });
+    }
+  }
+
+  return ngrams;
 }
 
 async function processLyricFile(
@@ -598,6 +734,14 @@ async function processLyricFile(
       : "";
     const toneJyutping = record.prosody.tone_pattern_cantonese_jyutping;
 
+    const normalizedTextCandidate = record.normalization.isValid
+      ? record.normalization.originalText
+      : null;
+    const syllableChars = resolveSyllableChars(
+      [normalizedTextCandidate, record.text],
+      toneJyutping.length,
+    );
+
     const tokens = record.nlp.tokens
       .map((token, index) => ({
         position: index + 1,
@@ -615,14 +759,15 @@ async function processLyricFile(
         jyutping,
         jyutpingNormalized: split.normalized,
         consonant: split.consonant,
-        rhyme: split.rhyme,
+        rhyme: split.rhyme ? split.rhyme.toLowerCase() : null,
         toneRaw: split.toneRaw,
         toneDigit: mappedTone,
-        char: null,
+        char: syllableChars[index] ?? null,
       } satisfies PreparedSyllable;
     });
 
-    const toneNgrams = computeToneBigrams(tonePattern);
+    const toneNgrams = computeToneNgrams(tonePattern);
+    const rhymeNgrams = computeRhymeNgrams(syllables);
 
     const themeNames = Array.from(new Set(record.semantics.themes.map(sanitizeName)))
       .filter((name) => name.length > 0);
@@ -651,6 +796,9 @@ async function processLyricFile(
       tokenCount: tokens.length,
       jyutpingCount: toneJyutping.length,
       tonePatternText,
+      normalizationIsValid: record.normalization.isValid,
+      normalizationOriginalText: record.normalization.originalText,
+      normalizationNotes: record.normalization.validationNotes,
     };
 
     preparedLines.push({
@@ -659,8 +807,10 @@ async function processLyricFile(
       tokens,
       syllables,
       toneNgrams,
+      rhymeNgrams,
       themeIds,
       keywordIds,
+      normalization: record.normalization,
     });
   }
 
@@ -695,6 +845,7 @@ async function processLyricFile(
     const tokenData: Prisma.TokenCreateManyInput[] = [];
     const syllableData: Prisma.SyllableCreateManyInput[] = [];
     const toneNgramData: Prisma.ToneNgramCreateManyInput[] = [];
+    const rhymeNgramData: Prisma.RhymeNgramCreateManyInput[] = [];
     const themeLinkData: Prisma.LyricThemeCreateManyInput[] = [];
     const keywordLinkData: Prisma.LyricKeywordCreateManyInput[] = [];
 
@@ -736,6 +887,17 @@ async function processLyricFile(
         });
       }
 
+      for (const ngram of line.rhymeNgrams) {
+        rhymeNgramData.push({
+          lyricId: lineId,
+          n: ngram.n,
+          value: ngram.value,
+          position: ngram.position,
+          syllableCount: ngram.syllableCount,
+          tokenCount: ngram.tokenCount,
+        });
+      }
+
       if (line.themeIds.length > 0) {
         for (const themeId of line.themeIds) {
           themeLinkData.push({ lyricId: lineId, themeId });
@@ -756,6 +918,9 @@ async function processLyricFile(
     }
     if (toneNgramData.length > 0) {
       await tx.toneNgram.createMany({ data: toneNgramData });
+    }
+    if (rhymeNgramData.length > 0) {
+      await tx.rhymeNgram.createMany({ data: rhymeNgramData });
     }
     if (themeLinkData.length > 0) {
       await tx.lyricTheme.createMany({ data: themeLinkData, skipDuplicates: true });
@@ -940,7 +1105,7 @@ async function populateMainDatabase() {
       `   🔍 Lyrics counts: ${finalSongCount} songs, ${finalLyricLineCount} lyric lines`,
     );
   } catch (error) {
-    logger.error("❌ Error populating database:", error);
+    logger.error(`❌ Error populating database: ${error}`);
     Deno.exit(1);
   } finally {
     await prisma.$disconnect();

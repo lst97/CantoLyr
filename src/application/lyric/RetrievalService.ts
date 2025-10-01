@@ -11,6 +11,7 @@ import { GoogleGenAI } from "npm:@google/genai";
 import { isAbsolute, join, normalize } from "jsr:@std/path";
 import { PrismaClient } from "../../../prisma/generated/client.ts";
 import { PatternSlot, SegmentationPattern } from "../../domain/lyric/entities.ts";
+import SiliconFlowEmbeddingProvider from "../../infrastructure/adapters/embedding/SiliconFlowEmbeddingProvider.ts";
 
 const ALLOWED_POS_TAGS = new Set([
   "NOUN",
@@ -235,6 +236,8 @@ export class RetrievalService {
   private embeddingModel: string;
   private transformersCache: string;
   private embeddingFunction: any | null = null;
+  private useCloudEmbedding = false;
+  private siliconflowProvider: SiliconFlowEmbeddingProvider | null = null;
   private geminiApiKey?: string;
   private geminiSceneModel: string;
   private prisma: PrismaClient | null = null;
@@ -243,10 +246,37 @@ export class RetrievalService {
     this.collectionName = Deno.env.get("CHROMA_COLLECTION") ??
       "cantolyr_lexicon_v1_1024";
     this.chromaUrl = Deno.env.get("CHROMA_URL") ?? "http://localhost:8000";
-    this.embeddingModel = Deno.env.get("EMBEDDING_MODEL") ??
-      "onnx-community/Qwen3-Embedding-0.6B-ONNX";
+
+    const embeddingProvider = (Deno.env.get("EMBEDDING_PROVIDER") || "local").toLowerCase();
+    this.useCloudEmbedding = embeddingProvider === "siliconflow";
+
+    // Model IDs default depending on backend
+    if (this.useCloudEmbedding) {
+      this.embeddingModel = Deno.env.get("SILICONFLOW_EMBED_MODEL") ||
+        Deno.env.get("EMBEDDING_MODEL") ||
+        "Qwen/Qwen3-Embedding-0.6B";
+    } else {
+      this.embeddingModel = Deno.env.get("EMBEDDING_MODEL") ||
+        "onnx-community/Qwen3-Embedding-0.6B-ONNX";
+    }
+
     this.transformersCache = Deno.env.get("TRANSFORMERS_CACHE") ??
       "./.cache/transformers";
+
+    // SiliconFlow config (only initialized if using cloud)
+    if (this.useCloudEmbedding) {
+      const apiKey = Deno.env.get("SILICONFLOW_API_KEY");
+      const baseUrl = Deno.env.get("SILICONFLOW_BASE_URL") || "https://api.siliconflow.cn";
+      if (!apiKey) {
+        throw new Error("SILICONFLOW_API_KEY is required when EMBEDDING_PROVIDER=siliconflow");
+      }
+      this.siliconflowProvider = new SiliconFlowEmbeddingProvider({
+        apiKey,
+        model: this.embeddingModel,
+        baseUrl,
+      });
+    }
+
     this.geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? undefined;
     this.geminiSceneModel = Deno.env.get("GEMINI_SCENE_MODEL") ??
       "gemini-2.5-flash-lite";
@@ -796,7 +826,7 @@ export class RetrievalService {
   }
 
   private async ensureEmbedding(): Promise<void> {
-    if (this.embeddingFunction) return;
+    if (this.embeddingFunction || this.useCloudEmbedding) return;
     let cacheDir = this.transformersCache || ".cache/transformers";
     try {
       // Resolve TRANSFORMERS_CACHE to an absolute project-root path
@@ -839,6 +869,14 @@ export class RetrievalService {
   }
 
   private async embed(text: string): Promise<number[]> {
+    if (this.useCloudEmbedding) {
+      if (!this.siliconflowProvider) {
+        throw new Error(LyricErrorCode.ERROR_EMBEDDING_FAILED);
+      }
+      const [vec] = await this.siliconflowProvider.embed([text]);
+      if (!vec) throw new Error(LyricErrorCode.ERROR_EMBEDDING_FAILED);
+      return vec.map((x) => Number(x));
+    }
     if (!this.embeddingFunction) {
       throw new Error(LyricErrorCode.ERROR_EMBEDDING_FAILED);
     }

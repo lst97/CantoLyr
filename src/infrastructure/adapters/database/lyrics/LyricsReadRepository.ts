@@ -14,6 +14,17 @@ const HAN_REGEX = /\p{Script=Han}/u;
 const LETTER_REGEX = /\p{Letter}/u;
 const NUMBER_REGEX = /\p{Number}/u;
 
+interface RhymeContext {
+  clause: Record<string, unknown>;
+  targets: Set<string>;
+  position?: number;
+  sequenceValue?: string;
+  sequenceLength?: number;
+  requireSequence: boolean;
+  inputs: string[];
+  variantGroups?: string[][];
+}
+
 function deriveToneValues(
   jyutping: string,
   rawValue?: number | null,
@@ -102,14 +113,15 @@ export class LyricsReadRepository implements LyricsRepo {
       pronunciationPosition,
       rhyme,
       rhymePosition,
+      rhymeSequence,
       themes,
       keywords,
       limit = 50,
       offset = 0,
     } = params;
 
-    const rhymeContext = this.buildRhymeContext(rhyme, rhymePosition);
-    const where = this.buildWhereClause(params, rhymeContext?.clause);
+    const rhymeContext = this.buildRhymeContext(rhyme, rhymePosition, rhymeSequence);
+    const where = this.buildWhereClause(params, rhymeContext);
 
     const normalizedPronunciation = typeof pronunciation === "string" ? pronunciation.trim() : "";
     const toneLength = normalizedPronunciation.length;
@@ -138,7 +150,7 @@ export class LyricsReadRepository implements LyricsRepo {
               ...(toneLength > 0 ? { n: toneLength } : {}),
               ...(pronunciationPosition ? { position: pronunciationPosition } : {}),
             },
-            select: { value: true, position: true },
+            select: { value: true, position: true, n: true },
           }
           : false,
         themes: themes?.length ? { select: { theme: { select: { name: true } } } } : false,
@@ -157,8 +169,21 @@ export class LyricsReadRepository implements LyricsRepo {
             rhyme: true,
             toneRaw: true,
             toneDigit: true,
+            char: true,
           },
         },
+        rhymeNgrams: rhymeContext?.sequenceValue
+          ? {
+            where: {
+              value: rhymeContext.sequenceValue,
+              ...(rhymeContext.sequenceLength ? { n: rhymeContext.sequenceLength } : {}),
+              ...(typeof rhymeContext.position === "number"
+                ? { position: rhymeContext.position }
+                : {}),
+            },
+            select: { value: true, position: true, n: true },
+          }
+          : false,
       },
       orderBy: [{ songId: "asc" }, { lineIndex: "asc" }],
       take: limit,
@@ -177,6 +202,7 @@ export class LyricsReadRepository implements LyricsRepo {
           rhyme: s.rhyme ?? null,
           toneRaw,
           toneDigit,
+          char: typeof s.char === "string" && s.char.length > 0 ? s.char : null,
         } satisfies MatchedSyllableDTO;
       });
       const matchedSyllables = rhymeContext
@@ -203,6 +229,44 @@ export class LyricsReadRepository implements LyricsRepo {
             pos: t.pos ?? null,
           })),
         )
+        : undefined;
+      const toneMatches = Array.isArray(r.toneNgrams)
+        ? r.toneNgrams.map((t) => {
+          const length = typeof t.n === "number" && Number.isFinite(t.n) ? Math.trunc(t.n) : 0;
+          const normalizedLength = length > 0 ? length : Math.max(t.value?.length ?? 0, 0);
+          const upperBound = t.position + normalizedLength;
+          const slice = allSyllables.filter((s) =>
+            s.position >= t.position && s.position < upperBound
+          );
+          const characters = slice.map((s) => s.char ?? "").join("");
+          return {
+            value: t.value,
+            position: t.position,
+            length: normalizedLength,
+            characters: characters.length > 0 ? characters : undefined,
+          };
+        }).filter((match) => match.length > 0 && typeof match.position === "number")
+        : undefined;
+      const rhymeMatches = Array.isArray(r.rhymeNgrams)
+        ? r.rhymeNgrams.map((ngram) => {
+          const length = typeof ngram.n === "number" && Number.isFinite(ngram.n)
+            ? Math.trunc(ngram.n)
+            : 0;
+          const normalizedLength = length > 0
+            ? length
+            : Math.max(ngram.value?.split(",").length ?? 0, 0);
+          const upperBound = ngram.position + normalizedLength;
+          const slice = allSyllables.filter((s) =>
+            s.position >= ngram.position && s.position < upperBound
+          );
+          const characters = slice.map((s) => s.char ?? "").join("");
+          return {
+            value: ngram.value,
+            position: ngram.position,
+            length: normalizedLength,
+            characters: characters.length > 0 ? characters : undefined,
+          };
+        }).filter((match) => match.length > 0 && typeof match.position === "number")
         : undefined;
       const syntaxNotesRaw = typeof r.syntaxNotes === "string" ? r.syntaxNotes.trim() : null;
       const syntaxNotes = syntaxNotesRaw && syntaxNotesRaw.length > 0 ? syntaxNotesRaw : null;
@@ -232,12 +296,8 @@ export class LyricsReadRepository implements LyricsRepo {
         syllableCount: r.syllableCount,
         tokenCount: r.tokenCount,
         tonePatternText: r.tonePatternText,
-        pronunciationBigrams: Array.isArray(r.toneNgrams)
-          ? r.toneNgrams.map((t) => ({
-            value: t.value,
-            position: t.position,
-          }))
-          : undefined,
+        pronunciationBigrams: toneMatches && toneMatches.length > 0 ? toneMatches : undefined,
+        rhymeMatches: rhymeMatches && rhymeMatches.length > 0 ? rhymeMatches : undefined,
         tokens,
         syntaxNotes,
         matchedSyllables: matchedSyllables && matchedSyllables.length > 0
@@ -248,14 +308,23 @@ export class LyricsReadRepository implements LyricsRepo {
         keywords: Array.isArray(r.keywords)
           ? r.keywords.map((k: any) => k.keyword.word)
           : undefined,
+        normalization: {
+          isValid: Boolean(r.normalizationIsValid),
+          originalText: r.normalizationOriginalText ?? null,
+          notes: r.normalizationNotes ?? null,
+        },
       } satisfies LyricLineDTO;
     });
   }
   async countLyricLines(
     params: Omit<LyricSearchParams, "limit" | "offset">,
   ): Promise<number> {
-    const rhymeContext = this.buildRhymeContext(params.rhyme, params.rhymePosition);
-    const where = this.buildWhereClause(params, rhymeContext?.clause);
+    const rhymeContext = this.buildRhymeContext(
+      params.rhyme,
+      params.rhymePosition,
+      params.rhymeSequence,
+    );
+    const where = this.buildWhereClause(params, rhymeContext);
     return await this.prisma.lyricLine.count({ where });
   }
 
@@ -299,7 +368,7 @@ export class LyricsReadRepository implements LyricsRepo {
 
   private buildWhereClause(
     params: LyricSearchParams,
-    syllableClause?: Record<string, unknown>,
+    rhymeContext?: RhymeContext,
   ): Record<string, unknown> | undefined {
     const {
       limit: _limit,
@@ -315,7 +384,7 @@ export class LyricsReadRepository implements LyricsRepo {
       year,
     } = params;
 
-    const and: Array<Record<string, unknown>> = [];
+    const and: Array<Record<string, unknown>> = [{ normalizationIsValid: true }];
     if (id) and.push({ lyricId: id });
     if (sentiment) and.push({ sentiment });
 
@@ -341,8 +410,53 @@ export class LyricsReadRepository implements LyricsRepo {
       });
     }
 
-    if (syllableClause) {
+    const syllableClause = rhymeContext?.clause;
+    const hasMultiInclusive = Boolean(
+      rhymeContext &&
+        !rhymeContext.requireSequence &&
+        Array.isArray(rhymeContext.inputs) &&
+        rhymeContext.inputs.length > 1,
+    );
+
+    if (syllableClause && !hasMultiInclusive) {
       and.push({ syllables: { some: syllableClause } });
+    }
+
+    if (hasMultiInclusive && rhymeContext && Array.isArray(rhymeContext.variantGroups)) {
+      const normalizedPosition = typeof rhymeContext.position === "number" &&
+          Number.isFinite(rhymeContext.position)
+        ? rhymeContext.position
+        : undefined;
+
+      for (const variants of rhymeContext.variantGroups) {
+        if (!Array.isArray(variants) || variants.length === 0) continue;
+        const orClauses = variants.flatMap((variant) => [
+          { rhyme: variant },
+          { jyutpingNormalized: variant },
+        ]);
+        if (orClauses.length === 0) continue;
+
+        const perInputClause: Record<string, unknown> = { OR: orClauses };
+        if (normalizedPosition !== undefined) {
+          perInputClause.position = normalizedPosition;
+        }
+
+        and.push({ syllables: { some: perInputClause } });
+      }
+    }
+
+    if (rhymeContext?.requireSequence && rhymeContext.sequenceValue) {
+      and.push({
+        rhymeNgrams: {
+          some: {
+            value: rhymeContext.sequenceValue,
+            ...(rhymeContext.sequenceLength ? { n: rhymeContext.sequenceLength } : {}),
+            ...(typeof rhymeContext.position === "number"
+              ? { position: rhymeContext.position }
+              : {}),
+          },
+        },
+      });
     }
 
     if (artist) {
@@ -363,7 +477,8 @@ export class LyricsReadRepository implements LyricsRepo {
   private buildRhymeContext(
     rhyme?: string | string[],
     rhymePosition?: number,
-  ): { clause: Record<string, unknown>; targets: Set<string>; position?: number } | undefined {
+    requireSequence?: boolean,
+  ): RhymeContext | undefined {
     const rawInputs = Array.isArray(rhyme)
       ? rhyme
       : typeof rhyme === "string"
@@ -379,12 +494,18 @@ export class LyricsReadRepository implements LyricsRepo {
     }
 
     const targets = new Set<string>();
+    const variantGroups: string[][] = [];
     for (const input of normalizedInputs) {
-      targets.add(input);
+      const variants = new Set<string>();
+      variants.add(input);
       const withoutTone = input.replace(/\d+$/u, "");
       if (withoutTone.length > 0) {
-        targets.add(withoutTone);
+        variants.add(withoutTone);
       }
+      for (const variant of variants) {
+        targets.add(variant);
+      }
+      variantGroups.push(Array.from(variants));
     }
 
     const clauses = Array.from(targets).flatMap((target) => [
@@ -404,10 +525,18 @@ export class LyricsReadRepository implements LyricsRepo {
       clause.position = normalizedPosition;
     }
 
+    const sequenceValue = requireSequence ? normalizedInputs.join(",") : undefined;
+    const hasSequence = Boolean(requireSequence && sequenceValue && sequenceValue.length > 0);
+
     return {
       clause,
       targets,
       position: normalizedPosition,
+      sequenceValue: hasSequence ? sequenceValue : undefined,
+      sequenceLength: hasSequence ? normalizedInputs.length : undefined,
+      requireSequence: hasSequence,
+      inputs: normalizedInputs,
+      variantGroups: variantGroups.length > 0 ? variantGroups : undefined,
     };
   }
 }

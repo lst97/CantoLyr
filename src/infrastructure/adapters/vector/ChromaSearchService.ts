@@ -1,6 +1,6 @@
 import { ChromaClient } from "chromadb";
 import { Logger } from "../../logging/Logger.ts";
-import { pipeline } from "npm:@huggingface/transformers@3.0.0";
+import { pipeline } from "npm:@huggingface/transformers";
 
 export interface ChromaSearchResult {
   documents: string[][];

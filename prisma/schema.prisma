@@ -153,12 +153,16 @@ model LyricLine {
   tokenCount    Int
   tonePatternText String
   jyutpingCount Int
+  normalizationIsValid Boolean  @default(false)
+  normalizationOriginalText String?
+  normalizationNotes    String?
 
   themes       LyricTheme[]
   keywords     LyricKeyword[]
   tokens       Token[]
   syllables    Syllable[]
   toneNgrams   ToneNgram[]
+  rhymeNgrams  RhymeNgram[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -166,6 +170,7 @@ model LyricLine {
   @@index([songId])
   @@index([lineIndex])
   @@index([sentiment])
+  @@index([normalizationIsValid])
   @@map("lyric_lines")
 }
 
@@ -257,4 +262,21 @@ model ToneNgram {
   @@index([position])
   @@index([syllableCount, tokenCount])
   @@map("tone_ngrams")
+}
+
+model RhymeNgram {
+  id            BigInt     @id @default(autoincrement())
+  lyricId       BigInt
+  lyric         LyricLine  @relation(fields: [lyricId], references: [id], onDelete: Cascade)
+  n             Int
+  value         String
+  position      Int
+  syllableCount Int
+  tokenCount    Int
+
+  @@index([lyricId])
+  @@index([n, value])
+  @@index([position])
+  @@index([syllableCount, tokenCount])
+  @@map("rhyme_ngrams")
 }

@@ -14,6 +14,12 @@ export interface LyricTokenDTO {
   syllables?: MatchedSyllableDTO[];
 }
 
+export interface LyricNormalizationDTO {
+  isValid: boolean;
+  originalText?: string | null;
+  notes?: string | null;
+}
+
 export interface LyricLineDTO {
   id: bigint;
   lyricId: string;
@@ -24,7 +30,10 @@ export interface LyricLineDTO {
   syllableCount: number;
   tokenCount: number;
   tonePatternText: string; // comma-joined mapped digits
-  pronunciationBigrams?: Array<{ value: string; position: number }>; // optional echo
+  pronunciationBigrams?: Array<
+    { value: string; position: number; length: number; characters?: string }
+  >; // optional echo of tone sequences
+  rhymeMatches?: Array<{ value: string; position: number; length: number; characters?: string }>;
   matchedSyllables?: MatchedSyllableDTO[];
   tokens?: LyricTokenDTO[];
   syntaxNotes?: string | null;
@@ -32,6 +41,7 @@ export interface LyricLineDTO {
   sentiment?: string | null;
   themes?: string[];
   keywords?: string[];
+  normalization: LyricNormalizationDTO;
 }
 
 export interface MatchedSyllableDTO {
@@ -42,6 +52,7 @@ export interface MatchedSyllableDTO {
   rhyme?: string | null;
   toneRaw?: number | null;
   toneDigit?: number | null;
+  char?: string | null;
 }
 
 export interface LyricSearchParams {
@@ -52,6 +63,7 @@ export interface LyricSearchParams {
   // rhyme token(s) and optional position
   rhyme?: string | string[];
   rhymePosition?: number;
+  rhymeSequence?: boolean;
   // metadata filters
   themes?: string[];
   keywords?: string[];

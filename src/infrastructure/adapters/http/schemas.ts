@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const SearchPronunciationQuerySchema = z.object({
   p: z.string().min(1, "p is required"),
+  entryType: z.enum(["all", "vocab", "char"]).optional(),
   mode: z.enum(["all", "vocab", "char"]).optional(),
   prefix: z.coerce.boolean().optional(),
   pageSize: z.coerce.number().int().min(1).max(20480).optional(),
@@ -12,7 +13,8 @@ export const SearchPronunciationQuerySchema = z.object({
 
 export const SearchRhymeQuerySchema = z.object({
   r: z.string().min(1, "rhyme is required"),
-  mode: z.enum(["all", "vocab", "char"]).optional(),
+  entryType: z.enum(["all", "vocab", "char"]).optional(),
+  mode: z.enum(["inclusive", "sequence", "both"]).optional(),
   pageSize: z.coerce.number().int().min(1).max(20480).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 });
@@ -49,6 +51,19 @@ export const SearchResponseSchema = z.object({
   query: z.string(),
   count: z.number().int().nonnegative(),
   items: z.array(ReadingItemSchema),
+  fromCache: z.boolean(),
+  processingTimeMs: z.number().int().nonnegative(),
+});
+
+export const LexiconSearchListSchema = z.object({
+  count: z.number().int().nonnegative(),
+  items: z.array(ReadingItemSchema),
+});
+
+export const LexiconRhymeSearchVariantsResponseSchema = z.object({
+  query: z.string(),
+  inclusive: LexiconSearchListSchema.optional(),
+  sequence: LexiconSearchListSchema.optional(),
   fromCache: z.boolean(),
   processingTimeMs: z.number().int().nonnegative(),
 });
@@ -146,6 +161,8 @@ export const LyricGenerationResponseSchema = z.object({
 const LyricPronunciationBigramSchema = z.object({
   value: z.string(),
   position: z.number().int().nonnegative(),
+  length: z.number().int().positive(),
+  characters: z.string().optional(),
 });
 
 const MatchedSyllableSchema = z.object({
@@ -156,6 +173,20 @@ const MatchedSyllableSchema = z.object({
   rhyme: z.string().nullable().optional(),
   toneRaw: z.number().int().nullable().optional(),
   toneDigit: z.number().int().nullable().optional(),
+  char: z.string().nullable().optional(),
+});
+
+const LyricNormalizationSchema = z.object({
+  isValid: z.boolean(),
+  originalText: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+const LyricRhymeMatchSchema = z.object({
+  value: z.string(),
+  position: z.number().int().nonnegative(),
+  length: z.number().int().positive(),
+  characters: z.string().optional(),
 });
 
 export const LyricSongSchema = z.object({
@@ -187,6 +218,9 @@ export const LyricLineSchema = z.object({
   pronunciationBigrams: z
     .array(LyricPronunciationBigramSchema)
     .optional(),
+  rhymeMatches: z
+    .array(LyricRhymeMatchSchema)
+    .optional(),
   matchedSyllables: z
     .array(MatchedSyllableSchema)
     .optional(),
@@ -195,6 +229,12 @@ export const LyricLineSchema = z.object({
   sentiment: z.string().nullable().optional(),
   themes: z.array(z.string()).optional().nullable(),
   keywords: z.array(z.string()).optional().nullable(),
+  normalization: LyricNormalizationSchema,
+});
+
+export const LyricSearchListSchema = z.object({
+  count: z.number().int().nonnegative(),
+  items: z.array(LyricLineSchema),
 });
 
 export const LyricSearchResponseSchema = z.object({
@@ -220,6 +260,14 @@ export const LyricFilterOptionsResponseSchema = z.object({
   fetchedAt: z.string(),
 });
 
+export const LyricRhymeSearchVariantsResponseSchema = z.object({
+  query: z.string(),
+  inclusive: LyricSearchListSchema.optional(),
+  sequence: LyricSearchListSchema.optional(),
+  fromCache: z.boolean(),
+  processingTimeMs: z.number().int().nonnegative(),
+});
+
 export const LyricSearchQuerySchema = z.object({
   tone: z.string().min(1, "tone is required when rhythm is absent").optional(),
   tonePosition: z.coerce.number().int().positive().optional(),
@@ -229,6 +277,8 @@ export const LyricSearchQuerySchema = z.object({
   rhymePosition: z.coerce.number().int().positive().optional(),
   rhythmPosition: z.coerce.number().int().positive().optional(),
   rythemPosition: z.coerce.number().int().positive().optional(),
+  rhymeSequence: z.coerce.boolean().optional(),
+  mode: z.enum(["inclusive", "sequence", "both"]).optional(),
   themes: z.string().optional(),
   keywords: z.string().optional(),
   lyricist: z.string().optional(),

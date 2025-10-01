@@ -1,4 +1,5 @@
 -- Dev reset: drop objects if exist
+DROP TABLE IF EXISTS "public"."rhyme_ngrams" CASCADE;
 DROP TABLE IF EXISTS "public"."tone_ngrams" CASCADE;
 DROP TABLE IF EXISTS "public"."syllables" CASCADE;
 DROP TABLE IF EXISTS "public"."tokens" CASCADE;
@@ -165,6 +166,9 @@ CREATE TABLE "public"."lyric_lines" (
     "tokenCount" INTEGER NOT NULL,
     "tonePatternText" TEXT NOT NULL,
     "jyutpingCount" INTEGER NOT NULL,
+    "normalizationIsValid" BOOLEAN NOT NULL DEFAULT FALSE,
+    "normalizationOriginalText" TEXT,
+    "normalizationNotes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -248,6 +252,20 @@ CREATE TABLE "public"."tone_ngrams" (
     CONSTRAINT "tone_ngrams_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "public"."rhyme_ngrams" (
+    "id" BIGSERIAL NOT NULL,
+    "lyricId" BIGINT NOT NULL,
+    "n" INTEGER NOT NULL,
+    "value" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "syllableCount" INTEGER NOT NULL,
+    "tokenCount" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "rhyme_ngrams_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "songs_docId_key" ON "public"."songs"("docId");
 
@@ -268,6 +286,9 @@ CREATE INDEX "lyric_lines_lineIndex_idx" ON "public"."lyric_lines"("lineIndex");
 
 -- CreateIndex
 CREATE INDEX "lyric_lines_sentiment_idx" ON "public"."lyric_lines"("sentiment");
+
+-- CreateIndex
+CREATE INDEX "lyric_lines_normalizationIsValid_idx" ON "public"."lyric_lines"("normalizationIsValid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "themes_name_key" ON "public"."themes"("name");
@@ -301,6 +322,18 @@ CREATE INDEX "tone_ngrams_position_idx" ON "public"."tone_ngrams"("position");
 
 -- CreateIndex
 CREATE INDEX "tone_ngrams_syllableCount_tokenCount_idx" ON "public"."tone_ngrams"("syllableCount", "tokenCount");
+
+-- CreateIndex
+CREATE INDEX "rhyme_ngrams_lyricId_idx" ON "public"."rhyme_ngrams"("lyricId");
+
+-- CreateIndex
+CREATE INDEX "rhyme_ngrams_n_value_idx" ON "public"."rhyme_ngrams"("n", "value");
+
+-- CreateIndex
+CREATE INDEX "rhyme_ngrams_position_idx" ON "public"."rhyme_ngrams"("position");
+
+-- CreateIndex
+CREATE INDEX "rhyme_ngrams_syllableCount_tokenCount_idx" ON "public"."rhyme_ngrams"("syllableCount", "tokenCount");
 
 -- AddForeignKey
 ALTER TABLE "public"."song_artists" ADD CONSTRAINT "song_artists_songId_fkey" FOREIGN KEY ("songId") REFERENCES "public"."songs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -337,6 +370,9 @@ ALTER TABLE "public"."syllables" ADD CONSTRAINT "syllables_lyricId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "public"."tone_ngrams" ADD CONSTRAINT "tone_ngrams_lyricId_fkey" FOREIGN KEY ("lyricId") REFERENCES "public"."lyric_lines"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."rhyme_ngrams" ADD CONSTRAINT "rhyme_ngrams_lyricId_fkey" FOREIGN KEY ("lyricId") REFERENCES "public"."lyric_lines"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Create the test database
 DROP DATABASE IF EXISTS cantolyr_test;
