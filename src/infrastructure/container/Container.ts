@@ -7,20 +7,20 @@ import type { ReadingRepo } from "../../application/ports/ReadingRepo.ts";
 import type { WriteRepo } from "../../application/ports/WriteRepo.ts";
 import type { Cache } from "../../application/ports/Cache.ts";
 import type { LyricsRepo } from "../../application/ports/LyricsRepo.ts";
-import type { LlmGroupedSelector } from "../../application/ports/LlmGroupedSelector.ts";
 
 // Adapters
 import { LexiconReadRepository } from "../adapters/database/lexicon/LexiconReadRepository.ts";
 import { LexiconWriteRepository } from "../adapters/database/lexicon/LexiconWriteRepository.ts";
 import { LyricsReadRepository } from "../adapters/database/lyrics/LyricsReadRepository.ts";
 import { InMemoryCache } from "../adapters/cache/InMemoryCache.ts";
-import { GeminiLlmGroupedSelector } from "../adapters/llm/GeminiLlmGroupedSelector.ts";
 
 // Use Cases
 import { SearchUseCase } from "../../application/use-cases/SearchUseCase.ts";
 import { ComposeLineUseCase } from "../../application/use-cases/ComposeLineUseCase.ts";
 import { RecordFeedbackUseCase } from "../../application/use-cases/RecordFeedbackUseCase.ts";
 import { PrismaClient } from "../../../prisma/generated/client.ts";
+import { LlmGroupedSelector } from "../../application/ports/index.ts";
+import { createLlmGroupedSelector } from "../adapters/llm/index.ts";
 
 // Type for resolvable services
 export type ServiceName = keyof Container["services"];
@@ -125,14 +125,10 @@ export class Container {
   }
 
   private createLlmGroupedSelector(): LlmGroupedSelector {
-    switch (this.config.llm.provider) {
-      case "gemini":
-        if (!this.config.llm.apiKey) {
-          throw new Error("Gemini API key is required");
-        }
-        return new GeminiLlmGroupedSelector({ apiKey: this.config.llm.apiKey });
-    }
-    throw new Error("Invalid LLM provider");
+    return createLlmGroupedSelector({
+      provider: this.config.llm.provider,
+      apiKey: this.config.llm.apiKey,
+    });
   }
 
   /**

@@ -74,7 +74,9 @@ export class ChromaSearchService {
     if (this.useCloudEmbedding) {
       const apiKey = Deno.env.get("SILICONFLOW_API_KEY");
       const baseUrl = Deno.env.get("SILICONFLOW_BASE_URL") || "https://api.siliconflow.cn";
-      if (!apiKey) throw new Error("SILICONFLOW_API_KEY is required when EMBEDDING_PROVIDER=siliconflow");
+      if (!apiKey) {
+        throw new Error("SILICONFLOW_API_KEY is required when EMBEDDING_PROVIDER=siliconflow");
+      }
       this.siliconflowProvider = new SiliconFlowEmbeddingProvider({
         apiKey,
         model: this.embeddingModel,

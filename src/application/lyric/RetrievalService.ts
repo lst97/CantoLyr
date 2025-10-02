@@ -249,7 +249,8 @@ export class RetrievalService {
 
     const embeddingProvider = (Deno.env.get("EMBEDDING_PROVIDER") || "").toLowerCase();
     const hasSiliconKey = Boolean(Deno.env.get("SILICONFLOW_API_KEY"));
-    this.useCloudEmbedding = embeddingProvider === "siliconflow" || (!embeddingProvider && hasSiliconKey);
+    this.useCloudEmbedding = embeddingProvider === "siliconflow" ||
+      (!embeddingProvider && hasSiliconKey);
 
     // Model IDs default depending on backend
     if (this.useCloudEmbedding) {

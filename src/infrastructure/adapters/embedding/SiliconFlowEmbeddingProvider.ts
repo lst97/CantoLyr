@@ -45,7 +45,9 @@ export class SiliconFlowEmbeddingProvider {
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
-        throw new Error(`SiliconFlow embeddings failed: ${res.status} ${res.statusText} ${errText}`);
+        throw new Error(
+          `SiliconFlow embeddings failed: ${res.status} ${res.statusText} ${errText}`,
+        );
       }
       const json: any = await res.json();
       // OpenAI-compatible: { data: [ { embedding: number[] }, ... ] }

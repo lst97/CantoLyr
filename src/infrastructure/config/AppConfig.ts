@@ -67,7 +67,7 @@ export function getConfig(): AppConfig {
       logQueries: Deno.env.get("DB_LOG_QUERIES") === "true",
     },
     llm: {
-      provider: Deno.env.get("LLM_PROVIDER") || "dummy",
+      provider: (Deno.env.get("LLM_PROVIDER") || "gemini").toLowerCase(),
       apiKey: Deno.env.get("GEMINI_API_KEY"),
     },
     cache: {
