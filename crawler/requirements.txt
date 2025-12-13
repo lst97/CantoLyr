@@ -3,3 +3,4 @@ jieba
 beautifulsoup4
 requests
 opencc-python-reimplemented
+urllib3>=2.6.0 # not directly required, pinned by Snyk to avoid a vulnerability
